@@ -11,7 +11,7 @@ repos:
     hooks:
     -   id: conventional-pre-commit
         stages: [commit-msg]
-        args: ["exp"] # optional: list of Conventional Commits types to allow e.g. [feat, fix, ci, chore, test]
+        args: [] # optional: list of Conventional Commits types to allow e.g. [feat, fix, ci, chore, test]
 
 -   repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.1.5
