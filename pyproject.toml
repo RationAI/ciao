@@ -25,7 +25,7 @@ test = ["pytest"]
 
 [tool.pdm.scripts]
 l = { composite = ["lint", "format", "mypy"] }
-tests = "pytest tests"
+test = "pytest tests"
 lint = "ruff check ."
 format = "ruff format ."
 mypy = "mypy ."
