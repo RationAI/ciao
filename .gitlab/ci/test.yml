@@ -1,0 +1,14 @@
+pytest:
+  stage: test
+  script:
+    # Allow pytest to fail with exit code 5 (no tests collected)
+    - pdm test --junitxml=report.xml || ( exit_code=$?; [ $exit_code -eq 5 ] && exit 0 || exit $exit_code )
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+  cache:
+    paths:
+      - .pytest_cache
+  rules:
+    - if: $CI_COMMIT_BRANCH != $TEMPLATE_CI_BRANCH && $CI_PIPELINE_SOURCE != 'schedule'

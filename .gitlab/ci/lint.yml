@@ -1,0 +1,24 @@
+ruff-lint:
+  stage: lint
+  script:
+    - pdm lint
+  rules:
+    - if: $CI_COMMIT_BRANCH != $TEMPLATE_CI_BRANCH && $CI_PIPELINE_SOURCE != 'schedule'
+
+ruff-format:
+  stage: lint
+  script:
+    - pdm format --check
+  rules:
+    - if: $CI_COMMIT_BRANCH != $TEMPLATE_CI_BRANCH && $CI_PIPELINE_SOURCE != 'schedule'
+
+mypy:
+  stage: lint
+  allow_failure: true
+  script:
+    - pdm mypy
+  cache:
+    paths:
+      - .mypy_cache
+  rules:
+    - if: $CI_COMMIT_BRANCH != $TEMPLATE_CI_BRANCH && $CI_PIPELINE_SOURCE != 'schedule'

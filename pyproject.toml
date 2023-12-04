@@ -3,7 +3,7 @@ name = ""
 version = "0.1.0"
 description = ""
 authors = []
-requires-python = ">=3.11,<3.12"
+requires-python = ">=3.11"
 readme = "README.md"
 license = { file = "LICENSE" }
 
@@ -39,9 +39,6 @@ post_install = { composite = [
 # Tool configuration
 #####################################
 
-[tool.pylint.messages_control]
-disable = ["missing-docstring", "redefined-builtin"]
-
 [tool.mypy]
 strict = true
 show_error_codes = true
@@ -53,6 +50,14 @@ line-length = 88
 target-version = "py311"
 extend-ignore = [
     "ERA001", # commented out code
+    "D100",   # missing docstring in public module
+    "D101",   # missing docstring in public class
+    "D102",   # missing docstring in public method
+    "D103",   # missing docstring in public function
+    "D104",   # missing docstring in public package
+    "D105",   # missing docstring in magic method
+    "D106",   # missing docstring in public nested class
+    "D107",   # missing docstring in __init__
 ]
 
 [tool.ruff.lint]
@@ -72,6 +77,7 @@ extend-select = [
     "TCH", # flake8-type-checking
     "TID", # flake8-tidy-imports
     "UP",  # pyupgrade
+    "D",   # pydocstyle 
 ]
 
 [tool.ruff.lint.flake8-tidy-imports]
@@ -80,3 +86,6 @@ ban-relative-imports = "all"
 [tool.ruff.lint.isort]
 lines-after-imports = 2
 known-first-party = ["tests"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

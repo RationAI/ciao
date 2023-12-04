@@ -1,64 +1,36 @@
-image: python:3.11
+default:
+  image: python:3.11
+  before_script:
+    - python --version ; pip --version  # For debugging
+    - pip install -q pdm
+    - pdm install --no-lock -q --skip=post_install # skip pre-commit hooks
 
-# Runs jobs only in merge request pipelines. 
-workflow:
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  # Pip's cache doesn't store the python packages
+  # https://pip.pypa.io/en/stable/topics/caching/
+  cache:
+    paths:
+      - .cache/pip
+      - .venv
+
 
 # Change pip's cache directory to be inside the project directory since we can
 # only cache local items.
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  TEMPLATE_CI_BRANCH: "ci/template"
 
-# Pip's cache doesn't store the python packages
-# https://pip.pypa.io/en/stable/topics/caching/
-#
-# If you want to also cache the installed packages, you have to install
-# them in a virtualenv and cache it as well.
-cache:
-  paths:
-    - .cache/pip
-    - .venv
+
+# Runs jobs only in merge request pipelines or if the branch is TEMPLATE_CI_BRANCH
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH == $TEMPLATE_CI_BRANCH
+
 
 stages:
   - lint
   - test
 
-before_script:
-  - python --version ; pip --version  # For debugging
-  - pip install -q pdm
-  - pdm install --no-lock -q
 
-
-ruff-lint:
-  stage: lint
-  script:
-    - pdm lint
-
-ruff-format:
-  stage: lint
-  script:
-    - pdm format --check
-
-mypy:
-  stage: lint
-  allow_failure: true
-  script:
-    - pdm mypy
-  cache:
-    paths:
-      - .mypy_cache
-
-pytest:
-  stage: test
-  script:
-    # Allow pytest to fail with exit code 5 (no tests collected)
-    - pdm test --junitxml=report.xml || ( exit_code=$?; [ $exit_code -eq 5 ] && exit 0 || exit $exit_code )
-  artifacts:
-    when: always
-    reports:
-      junit: report.xml
-  cache:
-    paths:
-      - .pytest_cache
+include: .gitlab/ci/*.yml
