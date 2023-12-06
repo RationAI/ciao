@@ -1,6 +1,7 @@
 sync:
   image: bitnami/git
   variables:
+    TEMPLATE_CI_BRANCH: "ci/template"
     USER_NAME: "group_1021_bot_390f0b45d22bcd3d4999f51de6ad8742"
     USER_EMAIL: "group_1021_bot_390f0b45d22bcd3d4999f51de6ad8742@noreply.gitlab.ics.muni.cz"
     TEMPLATE_REPO: https://${USER_NAME}:${GROUP_ACCESS_TOKEN_RW}@gitlab.ics.muni.cz/rationai/digital-pathology/templates/python.git

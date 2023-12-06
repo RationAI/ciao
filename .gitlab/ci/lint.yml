@@ -3,14 +3,16 @@ ruff-lint:
   script:
     - pdm lint
   rules:
-    - if: $CI_COMMIT_BRANCH != $TEMPLATE_CI_BRANCH && $CI_PIPELINE_SOURCE != 'schedule'
+    - !reference [.merge_request_pipelines, rules]
+
 
 ruff-format:
   stage: lint
   script:
     - pdm format --check
   rules:
-    - if: $CI_COMMIT_BRANCH != $TEMPLATE_CI_BRANCH && $CI_PIPELINE_SOURCE != 'schedule'
+    - !reference [.merge_request_pipelines, rules]
+
 
 mypy:
   stage: lint
@@ -21,4 +23,4 @@ mypy:
     paths:
       - .mypy_cache
   rules:
-    - if: $CI_COMMIT_BRANCH != $TEMPLATE_CI_BRANCH && $CI_PIPELINE_SOURCE != 'schedule'
+    - !reference [.merge_request_pipelines, rules]

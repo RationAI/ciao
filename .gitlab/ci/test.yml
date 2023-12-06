@@ -11,4 +11,4 @@ pytest:
     paths:
       - .pytest_cache
   rules:
-    - if: $CI_COMMIT_BRANCH != $TEMPLATE_CI_BRANCH && $CI_PIPELINE_SOURCE != 'schedule'
+    - !reference [.merge_request_pipelines, rules]

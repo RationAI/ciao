@@ -17,20 +17,18 @@ default:
 # only cache local items.
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
-  TEMPLATE_CI_BRANCH: "ci/template"
-
-
-# Runs jobs only in merge request pipelines or if the branch is TEMPLATE_CI_BRANCH
-workflow:
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_COMMIT_BRANCH == $TEMPLATE_CI_BRANCH
 
 
 stages:
   - lint
   - test
+
+
+# Runs jobs only in merge request pipelines
+.merge_request_pipelines:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 
 include: .gitlab/ci/*.yml
