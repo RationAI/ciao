@@ -5,14 +5,12 @@ ruff-lint:
   rules:
     - !reference [.merge_request_pipelines, rules]
 
-
 ruff-format:
   stage: lint
   script:
     - pdm format --check
   rules:
     - !reference [.merge_request_pipelines, rules]
-
 
 mypy:
   stage: lint
