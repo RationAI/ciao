@@ -16,7 +16,7 @@ dependencies = []
 
 [tool.pdm.dev-dependencies]
 dev = ["mypy", "pre-commit", "ruff"]
-test = ["pytest"]
+test = ["pytest", "pytest-cov"]
 
 
 #####################################
@@ -38,6 +38,17 @@ post_install = { composite = [
 #####################################
 # Tool configuration
 #####################################
+
+[tool.coverage.run]
+branch = true
+omit = ["tests/*"]
+source = ["."]
+
+[tool.coverage.report]
+exclude_also = [
+    # Don't complain about abstract methods, they aren't run:
+    "@(abc\\.)?abstractmethod",
+]
 
 [tool.mypy]
 strict = true
