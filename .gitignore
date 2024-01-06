@@ -165,6 +165,7 @@ cython_debug/
 
 # Mlflow
 mlruns/
+mlflow_store/
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
