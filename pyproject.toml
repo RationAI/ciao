@@ -1,5 +1,5 @@
 [project]
-name = ""
+name = "rationai-"
 version = "0.1.0"
 description = ""
 authors = []
@@ -15,10 +15,11 @@ test = ["pytest", "pytest-cov"]
 [tool.pdm.scripts]
 l = { composite = ["lint", "format", "mypy"] }
 test = "pytest tests"
-lint = "ruff check"
+lint = "ruff check --fix"
 format = "ruff format"
 mypy = "mypy ."
 post_install = { composite = [
+    "pre-commit autoupdate",
     "pre-commit install",
     "pre-commit install --hook-type commit-msg",
 ] }
