@@ -324,7 +324,7 @@ def sampling_phase(
     )
 
     # --- Distribution to Cache ---
-    for mask, score in zip(evaluation_queue, scores):
+    for mask, score in zip(evaluation_queue, scores, strict=True):
         signed_score = score * optimization_sign
         hits = mask_to_neighbors_mask[mask]
 
@@ -397,7 +397,7 @@ def select_best_prefix(
             batch_size=batch_size,
         )
 
-        for i, score in zip(missing_indices, computed_scores):
+        for i, score in zip(missing_indices, computed_scores, strict=True):
             signed_score = score * optimization_sign
             scores[i] = signed_score
             cache[prefix_masks[i]] = signed_score

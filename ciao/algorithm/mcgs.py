@@ -29,8 +29,8 @@ from ciao.structures.bitmask_graph import (
     iter_bits,
     sample_connected_superset,
 )
-from ciao.utils.calculations import ModelPredictor
 from ciao.structures.nodes import MCGSNode
+from ciao.utils.calculations import ModelPredictor
 from ciao.utils.search_utils import evaluate_masks, is_terminal
 
 
@@ -38,11 +38,11 @@ def select_uct_child(
     node: MCGSNode, exploration_c: float, virtual_loss: float
 ) -> tuple[int, MCGSNode] | None:
     """Select child with highest UCT score using edge statistics (MCGS mode).
-    
+
     In MCGS, we use edge statistics rather than node statistics to handle DAGs correctly.
     A child node may have high visits from other parents, which should not influence
     selection from this parent.
-    
+
     Returns:
         (action, child) tuple with best UCT score, or None if no children
     """
@@ -61,18 +61,16 @@ def select_uct_child(
             action, {"N": 0, "W": 0.0, "Q": 0.0, "max_reward": -float("inf")}
         )
         pending = node.pending_edges.get(action, 0)
-        
+
         # Use edge visit count (not child.visits) with virtual loss
         edge_n = edge_stats["N"] + pending * virtual_loss
 
         # Exploitation: Use edge max_reward (not child.max_value)
         exploit = edge_stats["max_reward"] if edge_stats["N"] > 0 else 0.0
-        
+
         # Exploration: Use edge visit count in denominator
-        explore = exploration_c * math.sqrt(
-            math.log(parent_visits) / max(1, edge_n)
-        )
-        
+        explore = exploration_c * math.sqrt(math.log(parent_visits) / max(1, edge_n))
+
         score = exploit + explore
 
         if score > best_score:
@@ -236,9 +234,9 @@ def update_rave_stats(node: MCGSNode, action: int, reward: float):
 
 
 def backup_paths(
-    batch_paths: list[list[MCGSNode]], 
+    batch_paths: list[list[MCGSNode]],
     batch_actions: list[list[int]],
-    rewards: list[float]
+    rewards: list[float],
 ) -> None:
     """Backup rewards through all nodes in the paths (standard mode).
 
@@ -253,22 +251,24 @@ def backup_paths(
         batch_actions: List of action sequences (one per simulation)
         rewards: List of rewards for each path
     """
-    for path, actions, reward in zip(batch_paths, batch_actions, rewards):
+    for path, actions, reward in zip(batch_paths, batch_actions, rewards, strict=True):
         for i, node in enumerate(path):
             # Update node statistics
             node.visits += 1
             node.value_sum += reward  # Mean tracking
             node.max_value = max(node.max_value, reward)  # MAX backup
-            
+
             # Update edge statistics and release virtual loss
             if i > 0:  # Skip root (no incoming edge)
                 action = actions[i - 1]  # Action that led to this node
                 parent = path[i - 1]
-                
+
                 # Release virtual loss on edge
                 if action in parent.pending_edges:
-                    parent.pending_edges[action] = max(0, parent.pending_edges[action] - 1)
-                
+                    parent.pending_edges[action] = max(
+                        0, parent.pending_edges[action] - 1
+                    )
+
                 # Update edge statistics
                 update_edge_stats(parent, action, reward)
 
@@ -303,7 +303,7 @@ def backup_paths_rave(
         used_mask: Globally excluded segments
     """
     for path, actions, rollout_mask, reward in zip(
-        batch_paths, batch_actions, batch_masks, rewards
+        batch_paths, batch_actions, batch_masks, rewards, strict=True
     ):
         rollout_segments = set(iter_bits(rollout_mask))
 
@@ -447,7 +447,7 @@ def build_hyperpixel_mcgs(
                     if action not in node.pending_edges:
                         node.pending_edges[action] = 0
                     node.pending_edges[action] += 1
-                    
+
                     actions_taken.append(action)
 
                 node = child
@@ -511,7 +511,7 @@ def build_hyperpixel_mcgs(
         # Evaluate only masks that need GPU
         gpu_rewards = []
         if masks_to_evaluate:
-            indices, masks = zip(*masks_to_evaluate)
+            indices, masks = zip(*masks_to_evaluate, strict=True)
             raw_rewards = evaluate_masks(
                 predictor, input_batch, segments, target_class_idx, list(masks)
             )
@@ -530,7 +530,7 @@ def build_hyperpixel_mcgs(
 
         # Update best score
         for path_idx, (reward, rollout_mask) in enumerate(
-            zip(batch_rewards, batch_masks)
+            zip(batch_rewards, batch_masks, strict=True)
         ):
             if reward > best_score:
                 best_score = reward

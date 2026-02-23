@@ -28,8 +28,8 @@ from ciao.structures.bitmask_graph import (
     iter_bits,
     sample_connected_superset,
 )
-from ciao.utils.calculations import ModelPredictor
 from ciao.structures.nodes import MCTSNode
+from ciao.utils.calculations import ModelPredictor
 from ciao.utils.search_utils import evaluate_masks, is_terminal
 
 
@@ -218,7 +218,7 @@ def backup_paths(batch_paths: list[list[MCTSNode]], rewards: list[float]) -> Non
     - max_value (MAX backup for selection)
     - pending (release virtual loss)
     """
-    for path, reward in zip(batch_paths, rewards):
+    for path, reward in zip(batch_paths, rewards, strict=True):
         for node in path:
             node.pending -= 1  # Release virtual loss
             node.visits += 1
@@ -252,7 +252,7 @@ def backup_paths_rave(
         rewards: List of rewards for each rollout
         global_stats: Optional global RAVE statistics
     """
-    for path, rollout_mask, reward in zip(batch_paths, batch_rollout_masks, rewards):
+    for path, rollout_mask, reward in zip(batch_paths, batch_rollout_masks, rewards, strict=True):
         # --- GLOBAL RAVE BACKUP ---
         if global_stats is not None:
             global_stats.update(rollout_mask, reward)
@@ -435,7 +435,7 @@ def build_hyperpixel_mcts(
         # Evaluate only masks that need GPU
         gpu_rewards = []
         if masks_to_evaluate:
-            indices, masks = zip(*masks_to_evaluate)
+            indices, masks = zip(*masks_to_evaluate, strict=True)
             raw_rewards = evaluate_masks(
                 predictor, input_batch, segments, target_class_idx, list(masks)
             )

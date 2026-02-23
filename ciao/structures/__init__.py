@@ -2,4 +2,5 @@
 
 from ciao.structures.nodes import MCGSNode, MCTSNode
 
-__all__ = ["MCTSNode", "MCGSNode"]
+
+__all__ = ["MCGSNode", "MCTSNode"]
