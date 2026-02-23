@@ -1,0 +1,39 @@
+"""Shared utilities for MCTS and MCGS search algorithms.
+
+This module contains common functions used by both Monte Carlo Tree Search (MCTS)
+and Monte Carlo Graph Search (MCGS) implementations.
+"""
+
+import numpy as np
+import torch
+
+from ciao.structures.bitmask_graph import get_frontier, iter_bits
+from ciao.utils.calculations import ModelPredictor, calculate_hyperpixel_deltas
+
+
+def is_terminal(mask: int, adj_masks: tuple, used_mask: int, max_depth: int) -> bool:
+    """Check if state is terminal (max depth or no frontier)."""
+    return (
+        mask.bit_count() >= max_depth or get_frontier(mask, adj_masks, used_mask) == 0
+    )
+
+
+def evaluate_masks(
+    predictor: ModelPredictor,
+    input_batch: torch.Tensor,
+    segments: np.ndarray,
+    target_class_idx: int,
+    masks: list[int],
+) -> list[float]:
+    """Evaluate multiple segment masks by computing class score deltas (batched)."""
+    all_segment_ids = [list(iter_bits(mask)) for mask in masks]
+
+    rewards = calculate_hyperpixel_deltas(
+        predictor=predictor,
+        input_batch=input_batch,
+        segments=segments,
+        target_class_idx=target_class_idx,
+        hyperpixel_segment_ids_list=all_segment_ids,
+    )
+
+    return rewards
