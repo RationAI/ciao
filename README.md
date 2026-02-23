@@ -1,4 +1,4 @@
-# CIAO-Simple: Contextual Importance Assessment via Obfuscation
+# CIAO: Contextual Importance Assessment via Obfuscation
 
 An implementation of explainable AI techniques for image classification. CIAO identifies influential image regions by systematically segmenting images, obfuscating segments, and using search algorithms to find important regions (hyperpixels).
 
@@ -18,7 +18,7 @@ CIAO explains what regions of an image contribute to a neural network's classifi
 ```bash
 # Clone the repository
 git clone https://github.com/RationAI/ciao.git
-cd ciao-simple
+cd ciao
 
 # Install dependencies using uv
 uv sync
@@ -29,13 +29,13 @@ uv sync
 Explain a single image with default settings:
 
 ```bash
-python ciao
+uv run python ciao
 ```
 
 Customize the explanation using Hydra configuration overrides:
 
 ```bash
-python ciao data.image_path=./my_image.jpg explanation.method=mcts explanation.segment_size=8
+uv run python ciao data.image_path=./my_image.jpg explanation.method=mcts explanation.segment_size=8
 ```
 
 ### Development Commands
@@ -81,7 +81,7 @@ python ciao data.image_path=./my_image.jpg explanation.method=mcts explanation.s
 ## Project Structure
 
 ```
-ciao-simple/
+ciao/
 ├── ciao/                           # Main package
 │   ├── algorithm/                  # Search algorithms
 │   │   ├── mcts.py                 # Monte Carlo Tree Search
