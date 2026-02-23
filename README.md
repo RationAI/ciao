@@ -17,7 +17,7 @@ CIAO explains what regions of an image contribute to a neural network's classifi
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/RationAI/ciao.git
 cd ciao-simple
 
 # Install dependencies using uv
@@ -46,6 +46,7 @@ python ciao data.image_path=./my_image.jpg explanation.method=mcts explanation.s
 - `uv run ruff format` - Format code
 - `uv run mypy .` - Run type checking
 - `uv run python ciao` - Run CIAO with default configuration
+- `uv run pytest tests` - Execute tests
 
 ## Method Details
 
@@ -100,7 +101,7 @@ ciao-simple/
 │   │   ├── segmentation.py         # Segmentation utilities
 │   │   └── search_utils.py         # Search algorithm utilities
 │   ├── visualization/              # Visualization tools
-│   │   └── visualisation.py        # Interactive visualizations
+│   │   └── visualization.py        # Interactive visualizations
 │   └── __main__.py                 # CLI entry point
 ├── configs/                        # Hydra configuration files
 │   ├── ciao.yaml                   # Main entry point
