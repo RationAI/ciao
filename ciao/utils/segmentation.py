@@ -123,40 +123,40 @@ def build_adjacency_graph(segments, neighborhood=8):
 
 
 def build_fast_adjacency_list(hex_to_id, max_id):
-    """Vytvoří 'static adjacency list' optimalizovaný pro rychlé čtení.
+    """Create a static adjacency list optimized for fast reading.
 
     Args:
-        hex_to_id: Dict mapující (q, r) -> int_id (0 až N-1)
-        max_id: Celkový počet segmentů (N)
+        hex_to_id: Dict mapping (q, r) -> int_id (0 to N-1)
+        max_id: Total number of segments (N)
 
     Returns:
         adj_list: Tuple of Tuples.
-                  adj_list[5] vrátí např. (4, 6, 12) - sousedy segmentu 5.
+                  adj_list[5] returns e.g. (4, 6, 12) - neighbors of segment 5.
     """
-    # Inicializujeme prázdné listy pro každé ID
-    # Používáme list listů pro konstrukci
+    # Initialize empty lists for each ID
+    # Use list of lists for construction
     temp_adj = [[] for _ in range(max_id)]
 
-    # Offsets pro sousedy (axial coords)
+    # Offsets for neighbors (axial coords)
     hex_neighbors = [(+1, 0), (+1, -1), (0, -1), (-1, 0), (-1, +1), (0, +1)]
 
     for (q, r), seg_id in hex_to_id.items():
         for dq, dr in hex_neighbors:
             neighbor_key = (q + dq, r + dr)
 
-            # Pokud soused existuje (je uvnitř obrázku)
+            # If neighbor exists (is within the image)
             if neighbor_key in hex_to_id:
                 neighbor_id = hex_to_id[neighbor_key]
                 temp_adj[seg_id].append(neighbor_id)
 
-    # Konverze na tuple of tuples pro maximální rychlost čtení a paměťovou efektivitu
-    # Seřadíme sousedy (volitelné, ale dobré pro determinismus)
+    # Convert to tuple of tuples for maximum read speed and memory efficiency
+    # Sort neighbors (optional, but good for determinism)
     final_adj = tuple(tuple(sorted(neighbors)) for neighbors in temp_adj)
 
     return final_adj
 
 
-# --- Upravená funkce create_hexagonal_grid ---
+# --- Modified create_hexagonal_grid function ---
 
 
 def create_hexagonal_grid_with_list(input_tensor, hex_radius=14):
@@ -166,8 +166,8 @@ def create_hexagonal_grid_with_list(input_tensor, hex_radius=14):
     hex_to_id = {}
     next_id = 0
 
-    # 1. Mapování pixelů na Hex ID
-    # (Tohle je nejpomalejší část, ale běží jen jednou při initu)
+    # 1. Map pixels to Hex ID
+    # (This is the slowest part, but runs only once during initialization)
     for y in range(height):
         for x in range(width):
             q, r = pixel_to_hex(x, y, hex_radius)
@@ -179,16 +179,16 @@ def create_hexagonal_grid_with_list(input_tensor, hex_radius=14):
 
             segments[y, x] = hex_to_id[key]
 
-    # 2. Vytvoření Rychlého Grafu (žádný NetworkX)
+    # 2. Create fast graph (no NetworkX)
     adjacency_list = build_fast_adjacency_list(hex_to_id, next_id)
 
     return segments, adjacency_list, next_id
 
 
 def build_adjacency_bitmasks(adj_list):
-    """Převede adjacency list na seznam integerů.
-    
-    adj_masks[5] bude integer, který má jedničky na pozicích sousedů hexu 5.
+    """Convert adjacency list to a list of integers.
+
+    adj_masks[5] will be an integer with bits set at positions of hex 5's neighbors.
     """
     adj_masks = []
     for neighbors in adj_list:

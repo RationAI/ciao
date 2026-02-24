@@ -49,7 +49,7 @@ def remove_node(mask: int, node: int) -> int:
 
 def pick_random_set_bit(mask: int) -> int:
     """Select a random set bit from the mask in O(N) where N is the index of the bit.
-    
+
     Without allocating a list. Efficient for sparse masks.
     """
     count = mask.bit_count()

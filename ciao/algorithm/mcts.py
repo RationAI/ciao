@@ -373,7 +373,11 @@ def build_hyperpixel_mcts(
                 else:
                     child = select_uct_child(node, exploration_c, virtual_loss)
 
-                assert child is not None
+                if child is None:
+                    raise RuntimeError(
+                        "Selection failed to find a child, but node is fully expanded."
+                    )
+
                 child.pending += 1
                 node = child
                 path.append(node)
@@ -587,9 +591,7 @@ def build_all_hyperpixels_mcts(
 
         hyperpixel_mask = result["mask"]
         used_mask = result["used_mask"]
-        hyperpixel_segments = [
-            seg_id for seg_id in range(next_id) if hyperpixel_mask & (1 << seg_id)
-        ]
+        hyperpixel_segments = list(iter_bits(hyperpixel_mask))
 
         if hyperpixel_segments:
             hyperpixels.append(

@@ -210,7 +210,7 @@ def _find_first_step(base_mask: int, target_mask: int) -> int:
     # Return the first bit in the difference
     for seg_id in iter_bits(diff):
         return seg_id
-    return -1  # Shouldn't happen
+    raise ValueError("Could not find first step between base and target mask.")
 
 
 def _evaluate_prefixes(

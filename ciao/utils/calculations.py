@@ -64,26 +64,29 @@ class ModelPredictor:
         """Generate replacement image for masking operations.
 
         Args:
-            input_tensor: Input tensor [3, 224, 224] (ImageNet normalized)
+            input_tensor: Input tensor [3, H, W] (ImageNet normalized)
             replacement: Strategy - "mean_color", "interlacing", "blur", or "solid_color"
             **kwargs: Additional options:
                 - color: For solid_color mode, RGB tuple (0-255). Defaults to black (0, 0, 0)
 
         Returns:
-            replacement_image: torch tensor [3, 224, 224] on same device
+            replacement_image: torch tensor [3, H, W] on same device
         """
         # Ensure tensor is on correct device
         input_tensor = input_tensor.to(self.device)
 
+        # Extract spatial dimensions from input tensor
+        _, height, width = input_tensor.shape
+
         if replacement == "mean_color":
             # Fill entire image with mean color
             mean_color = self.calculate_image_mean_color(input_tensor)  # [3, 1, 1]
-            replacement_image = mean_color.expand(-1, 224, 224)  # [3, 224, 224]
+            replacement_image = mean_color.expand(-1, height, width)  # [3, H, W]
 
         elif replacement == "interlacing":
             # Create interlaced pattern: even columns flipped vertically, then even indices flipped horizontally
             replacement_image = input_tensor.clone()
-            even_indices = torch.arange(0, 224, 2)  # [0, 2, 4, ..., 222]
+            even_indices = torch.arange(0, height, 2)  # Even row indices
 
             # Step 1: Flip even columns vertically (upside down)
             replacement_image[:, :, even_indices] = torch.flip(
@@ -115,7 +118,7 @@ class ModelPredictor:
             kernel = gaussian_2d.expand(3, 1, kernel_size, kernel_size)
 
             # Apply blur with padding to maintain image size
-            input_batch = input_tensor.unsqueeze(0)  # [1, 3, 224, 224]
+            input_batch = input_tensor.unsqueeze(0)  # [1, 3, H, W]
             padding = kernel_size // 2
 
             replacement_image = F.conv2d(
@@ -123,7 +126,7 @@ class ModelPredictor:
                 kernel,
                 padding=padding,
                 groups=3,  # Apply same kernel to each channel independently
-            ).squeeze(0)  # [3, 224, 224]
+            ).squeeze(0)  # [3, H, W]
 
         elif replacement == "solid_color":
             # Fill with specified solid color (expects RGB values in 0-255 range)
@@ -141,7 +144,7 @@ class ModelPredictor:
             mean = self.imagenet_mean.squeeze(0)  # [3, 1, 1]
             std = self.imagenet_std.squeeze(0)  # [3, 1, 1]
             normalized_color = (color - mean) / std
-            replacement_image = normalized_color.expand(-1, 224, 224)  # [3, 224, 224]
+            replacement_image = normalized_color.expand(-1, height, width)  # [3, H, W]
 
         else:
             raise ValueError(f"Unknown replacement strategy: {replacement}")
@@ -256,7 +259,7 @@ def create_surrogate_dataset(
     return X, y
 
 
-def calculate_scores_from_surrogate(X: np.ndarray, y: np.ndarray) -> dict[int, float]:
+def calculate_scores_from_surrogate(X: np.ndarray, y: np.ndarray) -> dict[int, float]:  # noqa: N803
     """Calculate averaged segment importance scores from surrogate dataset.
 
     For each segment, averages all delta scores where that segment was masked.
@@ -301,7 +304,7 @@ def calculate_hyperpixel_deltas(
     batch_size: int = 64,
 ) -> list[float]:
     """Calculate masking deltas for hyperpixel candidates using batched inference.
-    
+
     Handles internal batching to prevent memory overflow with large path counts.
 
     Args:
@@ -332,6 +335,9 @@ def calculate_hyperpixel_deltas(
         assert predictor.replacement_image is not None
         replacement_image = predictor.replacement_image
 
+        # Convert segments numpy array to GPU tensor once (outside loop)
+        gpu_segments = torch.from_numpy(segments).to(predictor.device)
+
         # Process in batches to avoid memory overflow
         all_deltas = []
         num_masks = len(hyperpixel_segment_ids_list)
@@ -341,9 +347,6 @@ def calculate_hyperpixel_deltas(
             current_batch_size = batch_end - batch_start
 
             batch_inputs = input_batch.repeat(current_batch_size, 1, 1, 1)
-
-            # Convert segments numpy array to GPU tensor once
-            gpu_segments = torch.from_numpy(segments).to(predictor.device)
 
             for i, segment_ids in enumerate(
                 hyperpixel_segment_ids_list[batch_start:batch_end]

@@ -429,26 +429,22 @@ def build_hyperpixel_mcgs(
                     uct_result = select_uct_child_rave(
                         node, exploration_c, virtual_loss, rave_k
                     )
-                    assert uct_result is not None
-                    action, child = uct_result
-
-                    # Apply virtual loss to edge
-                    if action not in node.pending_edges:
-                        node.pending_edges[action] = 0
-                    node.pending_edges[action] += 1
-
-                    actions_taken.append(action)
                 else:
                     uct_result = select_uct_child(node, exploration_c, virtual_loss)
-                    assert uct_result is not None
-                    action, child = uct_result
 
-                    # Apply virtual loss to edge
-                    if action not in node.pending_edges:
-                        node.pending_edges[action] = 0
-                    node.pending_edges[action] += 1
+                if uct_result is None:
+                    raise RuntimeError(
+                        "Selection failed to find a child, but node is fully expanded."
+                    )
 
-                    actions_taken.append(action)
+                action, child = uct_result
+
+                # Apply virtual loss to edge
+                if action not in node.pending_edges:
+                    node.pending_edges[action] = 0
+                node.pending_edges[action] += 1
+
+                actions_taken.append(action)
 
                 node = child
                 path.append(node)
@@ -665,9 +661,7 @@ def build_all_hyperpixels_mcgs(
 
         hyperpixel_mask = result["mask"]
         used_mask = result["used_mask"]
-        hyperpixel_segments = [
-            seg_id for seg_id in range(next_id) if hyperpixel_mask & (1 << seg_id)
-        ]
+        hyperpixel_segments = list(iter_bits(hyperpixel_mask))
 
         if hyperpixel_segments:
             hyperpixels.append(

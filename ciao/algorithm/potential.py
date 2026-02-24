@@ -49,7 +49,6 @@ def build_hyperpixel_using_potential(
     predictor,
     input_batch,
     segments,
-    adj_list: tuple[tuple[int, ...], ...],
     adj_masks: tuple[int, ...],
     target_class_idx: int,
     desired_length: int,
@@ -74,7 +73,6 @@ def build_hyperpixel_using_potential(
         predictor: Model predictor for scoring hyperpixels
         input_batch: Preprocessed input image tensor [1, C, H, W]
         segments: Segmentation map [H, W] (pixel -> segment ID)
-        adj_list: Adjacency list (tuple of tuples, legacy parameter for compatibility)
         adj_masks: Adjacency bitmasks (adj_masks[i] = neighbors of segment i)
         target_class_idx: Class to optimize for
         desired_length: Maximum hyperpixel size before prefix optimization
@@ -226,8 +224,9 @@ def build_hyperpixel_using_potential(
     }
 
 
+# ruff: noqa: RUF002
 def sampling_phase(
-    S_mask: int,
+    S_mask: int,  # noqa: N803
     neighbors: list[int],
     current_frontier_mask: int,
     num_simulations: int,
@@ -281,7 +280,7 @@ def sampling_phase(
 
     # --- Sampling Loop: Generate candidate expansions ---
     for n in neighbors:
-        # Start with S ∪ {n}
+        # Start with S ∪ {n}  # noqa: RUF003
         extended_mask = add_node(S_mask, n)
 
         # Compute frontier for random walk:
@@ -432,7 +431,7 @@ def select_best_prefix(
 
 
 def redistribute_history(
-    H_winner: list[tuple[int, float]],
+    H_winner: list[tuple[int, float]],  # noqa: N803
     new_frontier_mask: int,
     cache: dict[int, list[tuple[int, float]]],
 ):
@@ -472,7 +471,6 @@ def build_all_hyperpixels_potential(
     predictor,
     input_batch,
     segments,
-    adj_list,
     adj_masks,
     target_class_idx,
     scores,
@@ -487,7 +485,6 @@ def build_all_hyperpixels_potential(
         predictor: Model predictor
         input_batch: Preprocessed input tensor
         segments: Segmentation map
-        adj_list: Adjacency list
         adj_masks: Adjacency bitmasks
         target_class_idx: Target class index
         scores: Individual segment scores
@@ -520,7 +517,6 @@ def build_all_hyperpixels_potential(
             predictor,
             input_batch,
             segments,
-            adj_list,
             adj_masks,
             target_class_idx,
             desired_length,
