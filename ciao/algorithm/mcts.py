@@ -1,4 +1,4 @@
-"""Unified Monte Carlo Tree Search for Connected Image Segments
+"""Unified Monte Carlo Tree Search for Connected Image Segments.
 
 This module provides two MCTS variants controlled by the 'mode' parameter:
 1. 'standard': Standard MCTS with UCT selection and random rollouts
@@ -67,10 +67,7 @@ def is_fully_expanded(node: MCTSNode, adj_masks: tuple, used_mask: int) -> bool:
     """Check if all frontier segments have been expanded as children."""
     frontier = get_frontier(node.mask, adj_masks, used_mask)
 
-    for seg_id in iter_bits(frontier):
-        if seg_id not in node.children:
-            return False
-    return True
+    return all(seg_id in node.children for seg_id in iter_bits(frontier))
 
 
 # ============================================================================
@@ -252,7 +249,9 @@ def backup_paths_rave(
         rewards: List of rewards for each rollout
         global_stats: Optional global RAVE statistics
     """
-    for path, rollout_mask, reward in zip(batch_paths, batch_rollout_masks, rewards, strict=True):
+    for path, rollout_mask, reward in zip(
+        batch_paths, batch_rollout_masks, rewards, strict=True
+    ):
         # --- GLOBAL RAVE BACKUP ---
         if global_stats is not None:
             global_stats.update(rollout_mask, reward)
@@ -435,7 +434,7 @@ def build_hyperpixel_mcts(
         # Evaluate only masks that need GPU
         gpu_rewards = []
         if masks_to_evaluate:
-            indices, masks = zip(*masks_to_evaluate, strict=True)
+            _indices, masks = zip(*masks_to_evaluate, strict=True)
             raw_rewards = evaluate_masks(
                 predictor, input_batch, segments, target_class_idx, list(masks)
             )
@@ -556,9 +555,9 @@ def build_all_hyperpixels_mcts(
     processed_segments = set()
     used_mask = 0
 
-    for i in range(max_hyperpixels):
+    for _ in range(max_hyperpixels):
         available_segments = [
-            seg_id for seg_id in scores.keys() if seg_id not in processed_segments
+            seg_id for seg_id in scores if seg_id not in processed_segments
         ]
 
         if not available_segments:

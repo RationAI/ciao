@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 
 class ModelPredictor:
-    """Handles model predictions and class information"""
+    """Handles model predictions and class information."""
 
     def __init__(self, model, class_names: list[str]):
         self.model = model
@@ -22,7 +22,7 @@ class ModelPredictor:
         )
 
     def get_predictions(self, input_batch: torch.Tensor) -> torch.Tensor:
-        """Get model predictions (returns probabilities)"""
+        """Get model predictions (returns probabilities)."""
         with torch.no_grad():
             outputs = self.model(input_batch)
             probabilities = torch.nn.functional.softmax(outputs, dim=1)
@@ -31,7 +31,7 @@ class ModelPredictor:
     def predict_image(
         self, input_batch: torch.Tensor, top_k: int = 5
     ) -> list[tuple[int, str, float]]:
-        """Get top-k predictions for an image"""
+        """Get top-k predictions for an image."""
         probabilities = self.get_predictions(input_batch)
         top_probs, top_indices = torch.topk(probabilities[0], top_k)
 
@@ -48,7 +48,7 @@ class ModelPredictor:
         return results
 
     def calculate_image_mean_color(self, input_tensor: torch.Tensor) -> torch.Tensor:
-        """Calculate image mean color using pre-computed constants"""
+        """Calculate image mean color using pre-computed constants."""
         # Add batch dimension if needed
         if input_tensor.dim() == 3:
             input_tensor = input_tensor.unsqueeze(0)
@@ -156,7 +156,7 @@ class ModelPredictor:
     def get_class_logit_batch(
         self, input_batch: torch.Tensor, target_class_idx: int
     ) -> torch.Tensor:
-        """Get logits for a batch of images - optimized for batched inference (directly from model outputs)"""
+        """Get logits for a batch of images - optimized for batched inference (directly from model outputs)."""
         with torch.no_grad():
             outputs = self.model(input_batch)  # Get raw logits
 
@@ -217,7 +217,7 @@ def create_surrogate_dataset(
     local_groups = []
     for segment_id in segment_ids:
         # Get neighbors within specified distance using BFS
-        neighbors = set([segment_id])
+        neighbors = {segment_id}
         current_layer = {segment_id}
 
         for _ in range(neighborhood_distance):
@@ -287,7 +287,7 @@ def calculate_scores_from_surrogate(X: np.ndarray, y: np.ndarray) -> dict[int, f
 
 
 def get_predicted_class(predictor: ModelPredictor, input_batch: torch.Tensor) -> int:
-    """Get the predicted class index from model output"""
+    """Get the predicted class index from model output."""
     predictions = predictor.predict_image(input_batch, top_k=1)
     return predictions[0][0]
 
@@ -301,6 +301,7 @@ def calculate_hyperpixel_deltas(
     batch_size: int = 64,
 ) -> list[float]:
     """Calculate masking deltas for hyperpixel candidates using batched inference.
+    
     Handles internal batching to prevent memory overflow with large path counts.
 
     Args:
@@ -379,7 +380,7 @@ def calculate_hyperpixel_deltas(
 def select_top_hyperpixels(
     hyperpixels: list[dict], max_hyperpixels: int = 10
 ) -> list[dict]:
-    """Select top hyperpixels by their primary algorithm-specific score"""
+    """Select top hyperpixels by their primary algorithm-specific score."""
     # Use hyperpixel_score
     return sorted(
         hyperpixels,

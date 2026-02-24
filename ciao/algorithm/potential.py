@@ -258,14 +258,17 @@ def sampling_phase(
         S_mask: Current hyperpixel structure (bitmask)
         neighbors: Frontier nodes (list for iteration)
         current_frontier_mask: Same frontier as bitmask (for efficient computation)
-        num_simulations: Monte Carlo samples per frontier node
-        desired_length: Target expansion size for random walks
-        adj_masks: Adjacency bitmasks for graph traversal
-        predictor, input_batch, segments, target_class_idx: For model evaluation
+        num_simulations: Number of random walk simulations per frontier node
+        desired_length: Target hyperpixel size
+        adj_masks: Adjacency masks for graph structure
+        predictor: Model predictor for evaluation
+        input_batch: Input tensor batch
+        segments: Pixel-to-segment mapping array
+        target_class_idx: Target class index for prediction
         batch_size: Batch size for model inference
-        optimization_sign: +1 or -1 for score interpretation
-        cache: Potential cache to populate (modified in-place)
-        used_mask: Global exclusion mask
+        optimization_sign: +1 to maximize, -1 to minimize
+        cache: Potential cache mapping node -> list of (mask, score) pairs
+        used_mask: Bitmask of already-used nodes
 
     Returns:
         Tuple of (num_evaluations, num_samples)
@@ -356,7 +359,10 @@ def select_best_prefix(
 
     Args:
         full_structure: Complete hyperpixel (list of segment IDs in build order)
-        predictor, input_batch, segments, target_class_idx: For evaluation
+        predictor: Model predictor for evaluation
+        input_batch: Input tensor batch
+        segments: Pixel-to-segment mapping array
+        target_class_idx: Target class index for prediction
         batch_size: Batch size for model inference
         optimization_sign: +1 to maximize, -1 to minimize
         cache: Simple cache (mask -> score) for reuse
@@ -496,10 +502,10 @@ def build_all_hyperpixels_potential(
     hyperpixels = []
     processed_segments = set()
 
-    for i in range(max_hyperpixels):
+    for _ in range(max_hyperpixels):
         # Find unprocessed segment with highest absolute score
         available_segments = [
-            seg_id for seg_id in scores.keys() if seg_id not in processed_segments
+            seg_id for seg_id in scores if seg_id not in processed_segments
         ]
 
         if not available_segments:

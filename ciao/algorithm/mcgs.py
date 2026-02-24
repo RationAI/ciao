@@ -1,4 +1,4 @@
-"""Unified Monte Carlo Graph Search (MCGS) Implementation
+"""Unified Monte Carlo Graph Search (MCGS) Implementation.
 
 This module provides a unified MCGS implementation with multiple modes:
 - mode='standard': Standard MCGS with eager expansion and optimized node creation
@@ -402,7 +402,7 @@ def build_hyperpixel_mcgs(
 
     # --- MAIN MCGS LOOP ---
     mode_label = f"MCGS-{mode.upper()}"
-    for iteration in tqdm(range(num_iterations), desc=f"  {mode_label}", ncols=80):
+    for _iteration in tqdm(range(num_iterations), desc=f"  {mode_label}", ncols=80):
         # --- PHASE 1: BATCH COLLECTION ---
         batch_paths = []
         batch_masks = []
@@ -511,7 +511,7 @@ def build_hyperpixel_mcgs(
         # Evaluate only masks that need GPU
         gpu_rewards = []
         if masks_to_evaluate:
-            indices, masks = zip(*masks_to_evaluate, strict=True)
+            _indices, masks = zip(*masks_to_evaluate, strict=True)
             raw_rewards = evaluate_masks(
                 predictor, input_batch, segments, target_class_idx, list(masks)
             )
@@ -529,7 +529,7 @@ def build_hyperpixel_mcgs(
                 gpu_idx += 1
 
         # Update best score
-        for path_idx, (reward, rollout_mask) in enumerate(
+        for _path_idx, (reward, rollout_mask) in enumerate(
             zip(batch_rewards, batch_masks, strict=True)
         ):
             if reward > best_score:
@@ -633,9 +633,9 @@ def build_all_hyperpixels_mcgs(
     processed_segments = set()
     used_mask = 0
 
-    for i in range(max_hyperpixels):
+    for _ in range(max_hyperpixels):
         available_segments = [
-            seg_id for seg_id in scores.keys() if seg_id not in processed_segments
+            seg_id for seg_id in scores if seg_id not in processed_segments
         ]
 
         if not available_segments:

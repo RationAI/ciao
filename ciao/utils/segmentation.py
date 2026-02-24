@@ -8,7 +8,8 @@ def hex_round(q, r):
     """Round axial coordinates to nearest hex.
 
     Args:
-        q, r: Fractional axial coordinates
+        q: Fractional axial q coordinate
+        r: Fractional axial r coordinate
 
     Returns:
         (q, r): Integer axial coordinates of nearest hex
@@ -39,7 +40,8 @@ def pixel_to_hex(px, py, size):
     """Convert pixel coordinate to axial hex coordinates.
 
     Args:
-        px, py: Pixel coordinates
+        px: Pixel x coordinate
+        py: Pixel y coordinate
         size: Hex size (distance from center to flat edge for flat-top hexagons)
 
     Returns:
@@ -158,7 +160,7 @@ def build_fast_adjacency_list(hex_to_id, max_id):
 
 
 def create_hexagonal_grid_with_list(input_tensor, hex_radius=14):
-    channels, height, width = input_tensor.shape
+    _channels, height, width = input_tensor.shape
     segments = np.zeros((height, width), dtype=np.int32)
 
     hex_to_id = {}
@@ -185,6 +187,7 @@ def create_hexagonal_grid_with_list(input_tensor, hex_radius=14):
 
 def build_adjacency_bitmasks(adj_list):
     """Převede adjacency list na seznam integerů.
+    
     adj_masks[5] bude integer, který má jedničky na pozicích sousedů hexu 5.
     """
     adj_masks = []
@@ -197,8 +200,8 @@ def build_adjacency_bitmasks(adj_list):
 
 
 def create_square_grid(input_tensor, square_size=14, neighborhood=8):
-    """Create a grid of squares with graph structure representing spatial relationships"""
-    channels, height, width = input_tensor.shape
+    """Create a grid of squares with graph structure representing spatial relationships."""
+    _channels, height, width = input_tensor.shape
     segments = np.zeros((height, width), dtype=np.int32)
 
     segment_id = 0
@@ -235,7 +238,7 @@ def create_hexagonal_grid(input_tensor, hex_radius=14, neighborhood=6):
         segments: 2D array mapping pixels to segment IDs
         adjacency_graph: NetworkX graph of segment relationships
     """
-    channels, height, width = input_tensor.shape
+    _channels, height, width = input_tensor.shape
     segments = np.zeros((height, width), dtype=np.int32)
 
     # Map axial coordinates (q, r) to unique segment IDs
