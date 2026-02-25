@@ -231,7 +231,7 @@ def create_square_grid(
 
 
 def create_hexagonal_grid(
-    input_tensor: torch.Tensor, hex_radius: int = 14, neighborhood: int = 6
+    input_tensor: torch.Tensor, hex_radius: int = 14
 ) -> tuple[np.ndarray, nx.Graph]:
     """Create a grid of hexagons with graph structure representing spatial relationships.
 
@@ -241,7 +241,6 @@ def create_hexagonal_grid(
     Args:
         input_tensor: Input image tensor [C, H, W]
         hex_radius: Hex size parameter (distance from center to flat edge, default: 14)
-        neighborhood: Ignored for hexagons (always 6-connected)
 
     Returns:
         segments: 2D array mapping pixels to segment IDs
@@ -284,7 +283,7 @@ def create_segmentation(
         input_tensor: Input image tensor [C, H, W]
         segmentation_type: "square" or "hexagonal"
         segment_size: Size parameter (square_size or hex_radius)
-        neighborhood: Neighborhood connectivity (4, 6, or 8)
+        neighborhood: Neighborhood connectivity for squares (4, or 8)
 
     Returns:
         segments: 2D array mapping pixels to segment IDs
@@ -296,7 +295,7 @@ def create_segmentation(
         )
     elif segmentation_type == "hexagonal":
         return create_hexagonal_grid(
-            input_tensor, hex_radius=segment_size, neighborhood=neighborhood
+            input_tensor, hex_radius=segment_size
         )
     else:
         raise ValueError(
