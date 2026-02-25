@@ -153,7 +153,7 @@ class ModelPredictor:
 
     def plot_image_mean_color(self, input_tensor: torch.Tensor) -> None:
         """Display the mean color of the image.
-        
+
         Note: The visualization shows the normalized tensor (ImageNet normalization).
         """
         normalized_mean = self.calculate_image_mean_color(input_tensor).unsqueeze(0)

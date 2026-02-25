@@ -295,15 +295,13 @@ def create_segmentation(
             f"segment_size must be positive, got {segment_size}. "
             "Non-positive values cause division by zero or invalid range operations."
         )
-    
+
     if segmentation_type == "square":
         return create_square_grid(
             input_tensor, square_size=segment_size, neighborhood=neighborhood
         )
     elif segmentation_type == "hexagonal":
-        return create_hexagonal_grid(
-            input_tensor, hex_radius=segment_size
-        )
+        return create_hexagonal_grid(input_tensor, hex_radius=segment_size)
     else:
         raise ValueError(
             f"Unknown segmentation_type: {segmentation_type}. Use 'square' or 'hexagonal'."
