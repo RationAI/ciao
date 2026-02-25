@@ -1,3 +1,4 @@
+import logging
 import time
 
 import numpy as np
@@ -12,6 +13,9 @@ from ciao.structures.bitmask_graph import (
     sample_connected_superset,
 )
 from ciao.utils.calculations import ModelPredictor, calculate_hyperpixel_deltas
+
+
+logger = logging.getLogger(__name__)
 
 
 def compute_potentials(
@@ -110,8 +114,8 @@ def build_hyperpixel_using_potential(
     total_evaluations = 0
     total_samples = 0
 
-    print("\n=== Sequential Monte Carlo Set Extension ===")
-    print(f"Seed: {seed_idx}, Target: {desired_length}, Sims: {num_simulations}")
+    logger.info("\n=== Sequential Monte Carlo Set Extension ===")
+    logger.info(f"Seed: {seed_idx}, Target: {desired_length}, Sims: {num_simulations}")
 
     step = 0
 
@@ -119,7 +123,7 @@ def build_hyperpixel_using_potential(
     while len(hyperpixel_structure) < desired_length:
         step += 1
         total_steps += 1
-        print(
+        logger.info(
             f"\n--- Step {step}: |S| = {len(hyperpixel_structure)}/{desired_length} ---"
         )
 
@@ -127,11 +131,11 @@ def build_hyperpixel_using_potential(
         current_frontier_mask = get_frontier(structure_mask, adj_masks, used_mask)
 
         if not current_frontier_mask:
-            print("Frontier empty. Stopping.")
+            logger.info("Frontier empty. Stopping.")
             break
 
-        frontier_list = mask_to_ids(current_frontier_mask)
-        print(f"Frontier size: {len(frontier_list)}")
+        frontier_list = list(iter_bits(current_frontier_mask))
+        logger.debug(f"Frontier size: {len(frontier_list)}")
 
         # Phase 1: Sampling - Monte Carlo exploration from each frontier node
         step_start = time.time()
@@ -160,15 +164,15 @@ def build_hyperpixel_using_potential(
         winner = select_best_neighbor(potentials)
 
         if winner == -1:
-            print("No valid winner found. Stopping.")
+            logger.info("No valid winner found. Stopping.")
             break
 
         winner_stats = potentials[winner]
         max_potential = max(winner_stats) if winner_stats else 0
-        print(
+        logger.info(
             f"Winner: {winner} (samples: {len(winner_stats)}, max: {max_potential:.4f})"
         )
-        print(f"Timing: {sampling_time:.2f}s")
+        logger.debug(f"Timing: {sampling_time:.2f}s")
 
         # Commit: Add winner to hyperpixel structure
         hyperpixel_structure.append(winner)
@@ -184,11 +188,11 @@ def build_hyperpixel_using_potential(
         redistribute_history(winner_history, new_frontier_mask, potential_cache)
 
         recipient_count = len(potential_cache)
-        print(
+        logger.debug(
             f"Pruning: Kept {len(winner_history)} samples, redistributed to {recipient_count} neighbors"
         )
 
-    print("\n=== Extension Complete ===")
+    logger.info("\n=== Extension Complete ===")
 
     # Post-processing: Find optimal prefix (sometimes full length adds noise)
     final_hyperpixel, hyperpixel_score = select_best_prefix(
@@ -317,7 +321,7 @@ def sampling_phase(
         return 0, total_samples
 
     # --- Batch Evaluation: Score all unique expansions ---
-    print(f"  Evaluating {len(evaluation_queue)} unique samples...")
+    logger.debug(f"Evaluating {len(evaluation_queue)} unique samples")
     segment_id_lists = [mask_to_ids(mask) for mask in evaluation_queue]
     scores = calculate_hyperpixel_deltas(
         predictor=predictor,
@@ -420,11 +424,11 @@ def select_best_prefix(
 
     optimized_length = best_idx + 1
     if optimized_length < len(full_structure):
-        print(
+        logger.info(
             f"Optimization: Trimmed from {len(full_structure)} to {optimized_length} segments (Score: {max_score:.4f})"
         )
     else:
-        print(
+        logger.info(
             f"Optimization: Kept full length {len(full_structure)} segments (Score: {max_score:.4f})"
         )
 

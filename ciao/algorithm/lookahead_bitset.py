@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import torch
 
@@ -9,6 +11,8 @@ from ciao.structures.bitmask_graph import (
 )
 from ciao.utils.calculations import ModelPredictor, calculate_hyperpixel_deltas
 
+
+logger = logging.getLogger(__name__)
 
 """Greedy lookahead hyperpixel building with bitmask operations.
 
@@ -57,7 +61,7 @@ def build_hyperpixel_greedy_lookahead(
     total_evaluations = 0  # Track total number of evaluations
     num_steps = 0
 
-    print(f"  Starting greedy lookahead from seed {seed_idx}")
+    logger.info(f"Starting greedy lookahead from seed {seed_idx}")
 
     # Grow hyperpixel one step at a time
     while current_mask.bit_count() < desired_length:
@@ -74,13 +78,13 @@ def build_hyperpixel_greedy_lookahead(
         )
 
         if not candidates:
-            print(
-                f"  Step {num_steps}: No candidates available, stopping at size {current_size}"
+            logger.info(
+                f"Step {num_steps}: No candidates available, stopping at size {current_size}"
             )
             break
 
-        print(
-            f"  Step {num_steps}: Size={current_size}/{desired_length}, evaluating {len(candidates)} candidates..."
+        logger.debug(
+            f"Step {num_steps}: Size={current_size}/{desired_length}, evaluating {len(candidates)} candidates"
         )
 
         # Batch evaluate all candidates
@@ -105,8 +109,8 @@ def build_hyperpixel_greedy_lookahead(
         best_score = scores_list[best_idx]
         first_step = candidates[best_mask]
 
-        print(
-            f"  Step {num_steps}: Best score={best_score:.4f}, adding segment {first_step}"
+        logger.debug(
+            f"Step {num_steps}: Best score={best_score:.4f}, adding segment {first_step}"
         )
 
         # Commit only the first step
@@ -114,7 +118,7 @@ def build_hyperpixel_greedy_lookahead(
         path.append(first_step)
 
     # Evaluate all prefixes and find the best one
-    print(f"  Evaluating {len(path)} prefixes to find best subset...")
+    logger.debug(f"Evaluating {len(path)} prefixes to find best subset")
     num_prefix_evaluations = len(path)
     total_evaluations += num_prefix_evaluations
 
@@ -129,8 +133,8 @@ def build_hyperpixel_greedy_lookahead(
     )
 
     best_segments = mask_to_ids(best_prefix_mask)
-    print(
-        f"  Best prefix has {len(best_segments)} segments with score={best_score:.4f}"
+    logger.info(
+        f"Best prefix has {len(best_segments)} segments with score={best_score:.4f}"
     )
 
     return {
@@ -290,8 +294,10 @@ def build_all_hyperpixels_greedy_lookahead(
         seed_score = scores[seed_idx]
         optimization_sign = 1 if seed_score >= 0 else -1
 
-        print(f"\n--- Hyperpixel {i + 1}/{max_hyperpixels} ---")
-        print(f"Seed: {seed_idx}, score: {seed_score:.4f}, sign: {optimization_sign}")
+        logger.info(f"\n--- Hyperpixel {i + 1}/{max_hyperpixels} ---")
+        logger.info(
+            f"Seed: {seed_idx}, score: {seed_score:.4f}, sign: {optimization_sign}"
+        )
 
         result = build_hyperpixel_greedy_lookahead(
             predictor=predictor,
@@ -321,7 +327,7 @@ def build_all_hyperpixels_greedy_lookahead(
         }
         hyperpixels.append(hyperpixel)
 
-        print(
+        logger.info(
             f"Built hyperpixel with {len(result['segments'])} segments, score={result['score']:.4f}"  # type: ignore[arg-type]
         )
 

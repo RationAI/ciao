@@ -1,8 +1,13 @@
+import logging
+
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import torch
 import torch.nn.functional as F
+
+
+logger = logging.getLogger(__name__)
 
 
 class ModelPredictor:
@@ -211,8 +216,8 @@ def create_surrogate_dataset(
     original_logit = predictor.get_class_logit_batch(input_batch, target_class_idx)[
         0
     ].item()
-    print(f"Original logit: {original_logit}")
-    print(
+    logger.debug(f"Original logit: {original_logit}")
+    logger.debug(
         f"Probability of class {target_class_idx}: "
         f"{predictor.get_predictions(input_batch)[0, target_class_idx].item()}"
     )
@@ -257,8 +262,8 @@ def create_surrogate_dataset(
         for segment_id in masked_segments:
             X[i, segment_id] = 1.0
 
-    print(f"Created surrogate dataset: X shape {X.shape}, y shape {y.shape}")
-    print(f"Average delta: {y.mean():.4f}, std: {y.std():.4f}")
+    logger.info(f"Created surrogate dataset: X shape {X.shape}, y shape {y.shape}")
+    logger.info(f"Average delta: {y.mean():.4f}, std: {y.std():.4f}")
 
     return X, y
 
@@ -293,7 +298,7 @@ def calculate_scores_from_surrogate(X: np.ndarray, y: np.ndarray) -> dict[int, f
         scores[segment_id] = float(segment_scores.mean())
 
     score_values = list(scores.values())
-    print(f"Score range: [{min(score_values):.4f}, {max(score_values):.4f}]")
+    logger.info(f"Score range: [{min(score_values):.4f}, {max(score_values):.4f}]")
 
     return scores
 
@@ -387,9 +392,6 @@ def calculate_hyperpixel_deltas(
 
             # Memory cleanup
             del batch_inputs, masked_logits
-            # Note: torch.cuda.empty_cache() removed from inner loop for performance.
-            # Cache clearing here causes allocator churn and synchronization overhead.
-            # PyTorch's automatic memory management is sufficient for typical use.
 
         return all_deltas
 
