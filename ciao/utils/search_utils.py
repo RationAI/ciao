@@ -28,11 +28,12 @@ def evaluate_masks(
     masks: list[int],
 ) -> list[float]:
     """Evaluate multiple segment masks by computing class score deltas (batched)."""
-    # Guard against zero masks which would produce empty segment lists
-    if any(mask == 0 for mask in masks):
+    # Guard against invalid masks (zero or negative)
+    if any(mask <= 0 for mask in masks):
         raise ValueError(
-            "Cannot evaluate zero mask: A mask with value 0 contains no segments. "
-            "Ensure all masks have at least one bit set."
+            "Cannot evaluate invalid mask: A mask must be a positive integer. "
+            "Zero masks contain no segments, and negative masks cause "
+            "incorrect bit iteration due to two's complement representation."
         )
 
     all_segment_ids = [list(iter_bits(mask)) for mask in masks]

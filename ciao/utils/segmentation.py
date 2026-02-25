@@ -112,11 +112,12 @@ def build_adjacency_graph(segments: np.ndarray, neighborhood: int = 8) -> nx.Gra
     if neighborhood == 8:
         # Add diagonal adjacency for 8-neighborhood
         for y in range(height - 1):
-            for x in range(width - 1):
+            for x in range(width):
                 center_seg = segments[y, x]
-                # Check diagonal neighbors
-                if segments[y + 1, x + 1] != center_seg:
+                # Check down-right diagonal
+                if x + 1 < width and segments[y + 1, x + 1] != center_seg:
                     adj_graph.add_edge(center_seg, segments[y + 1, x + 1])
+                # Check down-left diagonal
                 if x > 0 and segments[y + 1, x - 1] != center_seg:
                     adj_graph.add_edge(center_seg, segments[y + 1, x - 1])
 
@@ -289,6 +290,12 @@ def create_segmentation(
         segments: 2D array mapping pixels to segment IDs
         adjacency_graph: NetworkX graph of segment relationships
     """
+    if segment_size <= 0:
+        raise ValueError(
+            f"segment_size must be positive, got {segment_size}. "
+            "Non-positive values cause division by zero or invalid range operations."
+        )
+    
     if segmentation_type == "square":
         return create_square_grid(
             input_tensor, square_size=segment_size, neighborhood=neighborhood

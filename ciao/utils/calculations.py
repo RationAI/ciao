@@ -152,6 +152,10 @@ class ModelPredictor:
         return replacement_image
 
     def plot_image_mean_color(self, input_tensor: torch.Tensor) -> None:
+        """Display the mean color of the image.
+        
+        Note: The visualization shows the normalized tensor (ImageNet normalization).
+        """
         normalized_mean = self.calculate_image_mean_color(input_tensor).unsqueeze(0)
         plt.imshow(normalized_mean[0].permute(1, 2, 0))
         plt.show()
@@ -281,6 +285,11 @@ def calculate_scores_from_surrogate(X: np.ndarray, y: np.ndarray) -> dict[int, f
         mask = X[:, segment_id] == 1.0
 
         segment_scores = y[mask]
+        if len(segment_scores) == 0:
+            raise ValueError(
+                f"Segment {segment_id} never appears in any local group. "
+                "This suggests a bug in group generation or segment ID mapping."
+            )
         scores[segment_id] = float(segment_scores.mean())
 
     score_values = list(scores.values())
@@ -332,7 +341,11 @@ def calculate_hyperpixel_deltas(
         ].item()
 
         # Get replacement image using the specified strategy
-        assert predictor.replacement_image is not None
+        if predictor.replacement_image is None:
+            raise RuntimeError(
+                "replacement_image is not initialized. "
+                "Call create_replacement_image() before using calculate_hyperpixel_deltas."
+            )
         replacement_image = predictor.replacement_image
 
         # Convert segments numpy array to GPU tensor once (outside loop)
@@ -374,8 +387,9 @@ def calculate_hyperpixel_deltas(
 
             # Memory cleanup
             del batch_inputs, masked_logits
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            # Note: torch.cuda.empty_cache() removed from inner loop for performance.
+            # Cache clearing here causes allocator churn and synchronization overhead.
+            # PyTorch's automatic memory management is sufficient for typical use.
 
         return all_deltas
 

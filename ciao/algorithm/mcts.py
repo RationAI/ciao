@@ -218,7 +218,7 @@ def backup_paths(batch_paths: list[list[MCTSNode]], rewards: list[float]) -> Non
     - pending (release virtual loss)
     """
     for path, reward in zip(batch_paths, rewards, strict=True):
-        for node in path:
+        for node in path[1:]:  # Skip root (never incremented, so shouldn't decrement)
             node.pending -= 1  # Release virtual loss
             node.visits += 1
             node.value_sum += reward  # Mean tracking
@@ -258,7 +258,7 @@ def backup_paths_rave(
         if global_stats is not None:
             global_stats.update(rollout_mask, reward)
 
-        for node in path:
+        for node in path[1:]:  # Skip root (never incremented, so shouldn't decrement)
             # --- STANDARD BACKUP ---
             node.pending -= 1  # Release virtual loss
             node.visits += 1

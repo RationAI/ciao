@@ -174,6 +174,12 @@ def _pick_weighted_frontier_segment(
     Returns:
         Selected segment ID
     """
+    if temperature <= 0:
+        raise ValueError(
+            f"temperature must be positive, got {temperature}. "
+            "Non-positive values cause division by zero or invalid probabilities."
+        )
+    
     # Extract frontier segment IDs and their weights
     frontier_ids = list(iter_bits(frontier))
     frontier_weights = segment_weights[frontier_ids]

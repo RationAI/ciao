@@ -192,9 +192,11 @@ def _generate_lookahead_candidates(
                     if mask in candidates:
                         first_step = candidates[mask]
                     else:
-                        # This shouldn't happen in proper BFS, but handle edge case
-                        # This mask came from current_mask, find the connection
-                        first_step = _find_first_step(current_mask, new_mask)
+                        # This shouldn't happen in proper BFS - raise error if it does
+                        raise RuntimeError(
+                            f"BFS inconsistency: mask {mask} not found in candidates at depth {depth}. "
+                            "This indicates a logic error in the BFS traversal."
+                        )
 
                 # Only add if not already seen (first path wins)
                 if new_mask not in candidates:
