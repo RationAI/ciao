@@ -63,7 +63,9 @@ class GlobalStats:
 # ============================================================================
 
 
-def is_fully_expanded(node: MCTSNode, adj_masks: tuple, used_mask: int) -> bool:
+def is_fully_expanded(
+    node: MCTSNode, adj_masks: tuple[int, ...], used_mask: int
+) -> bool:
     """Check if all frontier segments have been expanded as children."""
     frontier = get_frontier(node.mask, adj_masks, used_mask)
 
@@ -162,7 +164,7 @@ def select_uct_child_rave(
 
 def expand_node(
     node: MCTSNode,
-    adj_masks: tuple,
+    adj_masks: tuple[int, ...],
     used_mask: int,
     global_stats: GlobalStats | None = None,
 ) -> MCTSNode | None:
@@ -354,8 +356,9 @@ def build_hyperpixel_mcts(
         # --- PHASE 1: BATCH COLLECTION ---
         batch_paths = []
         batch_rollout_masks = []
-        cached_rewards = []  # Store cached values for visited terminals
-        needs_gpu_eval = []  # Track which entries need GPU evaluation
+        cached_rewards: list[
+            float | None
+        ] = []  # Store cached values for visited terminals
 
         for _ in range(batch_size):
             # --- SELECTION ---
@@ -400,7 +403,6 @@ def build_hyperpixel_mcts(
                 # Reuse cached value - no GPU evaluation needed
                 rollout_mask = node.mask
                 cached_rewards.append(node.max_value)
-                needs_gpu_eval.append(False)
             else:
                 # Need GPU evaluation
                 if is_terminal(node.mask, adj_masks, used_mask, desired_length):
@@ -417,7 +419,6 @@ def build_hyperpixel_mcts(
                     )
 
                 cached_rewards.append(None)
-                needs_gpu_eval.append(True)
 
             batch_paths.append(path)
             batch_rollout_masks.append(rollout_mask)
@@ -426,12 +427,12 @@ def build_hyperpixel_mcts(
         # Separate masks that need GPU evaluation from cached ones
         masks_to_evaluate = [
             (i, batch_rollout_masks[i])
-            for i, need_eval in enumerate(needs_gpu_eval)
-            if need_eval
+            for i, reward in enumerate(cached_rewards)
+            if reward is None
         ]
 
         # Update statistics
-        cache_hits = sum(1 for need_eval in needs_gpu_eval if not need_eval)
+        cache_hits = batch_size - len(masks_to_evaluate)
         total_cache_hits += cache_hits
         total_gpu_evaluations += len(masks_to_evaluate)
 
@@ -445,13 +446,13 @@ def build_hyperpixel_mcts(
             gpu_rewards = [r * optimization_sign for r in raw_rewards]
 
         # Merge GPU results with cached values (cached values are already signed)
-        batch_rewards = []
+        batch_rewards: list[float] = []
         gpu_idx = 0
-        for i in range(batch_size):
-            if not needs_gpu_eval[i]:
-                batch_rewards.append(cached_rewards[i])
+
+        for cached_val in cached_rewards:
+            if cached_val is not None:
+                batch_rewards.append(cached_val)
             else:
-                # Use GPU result
                 batch_rewards.append(gpu_rewards[gpu_idx])
                 gpu_idx += 1
 
@@ -511,28 +512,28 @@ def build_hyperpixel_mcts(
 
     # Add RAVE-specific data
     if mode == "rave":
-        result["stats"]["rave_k"] = rave_k
+        result["stats"]["rave_k"] = rave_k  # type: ignore[index]
 
     return result
 
 
 def build_all_hyperpixels_mcts(
-    predictor,
-    input_batch,
-    segments,
-    adj_masks,
-    target_class_idx,
-    scores,
-    next_id,
-    max_hyperpixels=10,
-    desired_length=30,
-    num_iterations=100,
-    mode="standard",
-    batch_size=64,
-    exploration_c=1.4,
-    virtual_loss=1.0,
-    rave_k=1000,
-):
+    predictor: ModelPredictor,
+    input_batch: torch.Tensor,
+    segments: np.ndarray,
+    adj_masks: tuple[int, ...],
+    target_class_idx: int,
+    scores: dict[int, float],
+    next_id: int,
+    max_hyperpixels: int = 10,
+    desired_length: int = 30,
+    num_iterations: int = 100,
+    mode: str = "standard",
+    batch_size: int = 64,
+    exploration_c: float = 1.4,
+    virtual_loss: float = 1.0,
+    rave_k: int = 1000,
+) -> list[dict[str, object]]:
     """Build multiple hyperpixels using MCTS.
 
     Args:

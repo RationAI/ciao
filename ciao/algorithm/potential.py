@@ -1,5 +1,8 @@
 import time
 
+import numpy as np
+import torch
+
 from ciao.structures.bitmask_graph import (
     add_node,
     get_frontier,
@@ -8,7 +11,7 @@ from ciao.structures.bitmask_graph import (
     remove_node,
     sample_connected_superset,
 )
-from ciao.utils.calculations import calculate_hyperpixel_deltas
+from ciao.utils.calculations import ModelPredictor, calculate_hyperpixel_deltas
 
 
 def compute_potentials(
@@ -32,7 +35,7 @@ def compute_potentials(
 def select_best_neighbor(potentials: dict[int, list[float]]) -> int:
     """Select neighbor with highest potential using lexicographical comparison."""
     best_neighbor = -1
-    best_vector = []
+    best_vector: list[float] = []
 
     for node_id, scores in potentials.items():
         if not scores:
@@ -46,18 +49,18 @@ def select_best_neighbor(potentials: dict[int, list[float]]) -> int:
 
 
 def build_hyperpixel_using_potential(
-    predictor,
-    input_batch,
-    segments,
+    predictor: ModelPredictor,
+    input_batch: torch.Tensor,
+    segments: np.ndarray,
     adj_masks: tuple[int, ...],
     target_class_idx: int,
     desired_length: int,
     seed_idx: int,
     num_simulations: int,
-    used_segments: set | None = None,
+    used_segments: set[int] | None = None,
     batch_size: int = 64,
     optimization_sign: int = 1,
-):
+) -> dict[str, object]:
     """Build a hyperpixel using Sequential Monte Carlo with Potential-based Selection.
 
     This algorithm grows a connected region on the segmentation graph by:
@@ -232,9 +235,9 @@ def sampling_phase(
     num_simulations: int,
     desired_length: int,
     adj_masks: tuple[int, ...],
-    predictor,
-    input_batch,
-    segments,
+    predictor: ModelPredictor,
+    input_batch: torch.Tensor,
+    segments: np.ndarray,
     target_class_idx: int,
     batch_size: int,
     optimization_sign: int,
@@ -341,9 +344,9 @@ def sampling_phase(
 
 def select_best_prefix(
     full_structure: list[int],
-    predictor,
-    input_batch,
-    segments,
+    predictor: ModelPredictor,
+    input_batch: torch.Tensor,
+    segments: np.ndarray,
     target_class_idx: int,
     batch_size: int,
     optimization_sign: int,
@@ -382,7 +385,7 @@ def select_best_prefix(
         prefixes.append(mask_to_ids(current_mask))
 
     missing_indices = []
-    scores = [None] * len(prefix_masks)
+    scores: list[float | None] = [None] * len(prefix_masks)
 
     for i, mask in enumerate(prefix_masks):
         if mask in cache:
@@ -408,10 +411,10 @@ def select_best_prefix(
             cache[prefix_masks[i]] = signed_score
 
     best_idx = 0
-    max_score = -float("inf")
+    max_score: float = -float("inf")
 
-    for i, score in enumerate(scores):
-        if score > max_score:
+    for i, score in enumerate(scores):  # type: ignore[assignment]
+        if score is not None and isinstance(score, float) and score > max_score:
             max_score = score
             best_idx = i
 
@@ -434,7 +437,7 @@ def redistribute_history(
     H_winner: list[tuple[int, float]],  # noqa: N803
     new_frontier_mask: int,
     cache: dict[int, list[tuple[int, float]]],
-):
+) -> None:
     """Redistribute winner's Monte Carlo history to the new frontier.
 
     After adding the winning node to the structure, the frontier changes.
@@ -468,17 +471,17 @@ def redistribute_history(
 
 
 def build_all_hyperpixels_potential(
-    predictor,
-    input_batch,
-    segments,
-    adj_masks,
-    target_class_idx,
-    scores,
-    max_hyperpixels=10,
-    desired_length=30,
-    num_simulations=50,
-    batch_size=64,
-):
+    predictor: ModelPredictor,
+    input_batch: torch.Tensor,
+    segments: np.ndarray,
+    adj_masks: tuple[int, ...],
+    target_class_idx: int,
+    scores: dict[int, float],
+    max_hyperpixels: int = 10,
+    desired_length: int = 30,
+    num_simulations: int = 50,
+    batch_size: int = 64,
+) -> list[dict[str, object]]:
     """Build multiple hyperpixels using the potential field method.
 
     Args:
@@ -496,8 +499,8 @@ def build_all_hyperpixels_potential(
     Returns:
         List of hyperpixel dictionaries
     """
-    hyperpixels = []
-    processed_segments = set()
+    hyperpixels: list[dict[str, object]] = []
+    processed_segments: set[int] = set()
 
     for _ in range(max_hyperpixels):
         # Find unprocessed segment with highest absolute score
@@ -534,13 +537,13 @@ def build_all_hyperpixels_potential(
                 {
                     "segments": hyperpixel_segments,
                     "sign": optimization_sign,
-                    "size": len(hyperpixel_segments),
+                    "size": len(hyperpixel_segments),  # type: ignore[arg-type]
                     "hyperpixel_score": result["score"],
                     "stats": result.get(
                         "stats", {}
                     ),  # Include potential method statistics
                 }
             )
-            processed_segments.update(hyperpixel_segments)
+            processed_segments.update(hyperpixel_segments)  # type: ignore[arg-type]
 
     return hyperpixels

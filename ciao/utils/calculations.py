@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import networkx as nx
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -7,7 +8,7 @@ import torch.nn.functional as F
 class ModelPredictor:
     """Handles model predictions and class information."""
 
-    def __init__(self, model, class_names: list[str]):
+    def __init__(self, model: torch.nn.Module, class_names: list[str]) -> None:
         self.model = model
         self.class_names = class_names
         self.device = next(model.parameters()).device
@@ -37,8 +38,8 @@ class ModelPredictor:
 
         results = []
         for i in range(top_k):
-            class_idx = top_indices[i].item()
-            prob = top_probs[i].item()
+            class_idx = int(top_indices[i].item())
+            prob = float(top_probs[i].item())
             class_name = (
                 self.class_names[class_idx]
                 if class_idx < len(self.class_names)
@@ -59,15 +60,17 @@ class ModelPredictor:
         return normalized_mean.squeeze(0)  # Remove batch dimension
 
     def get_replacement_image(
-        self, input_tensor: torch.Tensor, replacement: str = "mean_color", **kwargs
+        self,
+        input_tensor: torch.Tensor,
+        replacement: str = "mean_color",
+        color: tuple[int, int, int] = (0, 0, 0),
     ) -> torch.Tensor:
         """Generate replacement image for masking operations.
 
         Args:
             input_tensor: Input tensor [3, H, W] (ImageNet normalized)
             replacement: Strategy - "mean_color", "interlacing", "blur", or "solid_color"
-            **kwargs: Additional options:
-                - color: For solid_color mode, RGB tuple (0-255). Defaults to black (0, 0, 0)
+            color: For solid_color mode, RGB tuple (0-255). Defaults to black (0, 0, 0)
 
         Returns:
             replacement_image: torch tensor [3, H, W] on same device
@@ -130,20 +133,17 @@ class ModelPredictor:
 
         elif replacement == "solid_color":
             # Fill with specified solid color (expects RGB values in 0-255 range)
-            color = kwargs.get("color", (0, 0, 0))  # Default to black
-
             # Convert color to torch tensor (always assume 0-255 range)
-            if isinstance(color, (list, tuple)):
-                color = torch.tensor(color, dtype=torch.float32, device=self.device)
+            color_tensor = torch.tensor(color, dtype=torch.float32, device=self.device)
 
             # Convert from 0-255 range to 0-1 range
-            color = color / 255.0
+            color_tensor = color_tensor / 255.0
 
             # Apply ImageNet normalization - squeeze to remove batch dimension from constants
-            color = color.view(3, 1, 1)  # [3, 1, 1]
+            color_tensor = color_tensor.view(3, 1, 1)  # [3, 1, 1]
             mean = self.imagenet_mean.squeeze(0)  # [3, 1, 1]
             std = self.imagenet_std.squeeze(0)  # [3, 1, 1]
-            normalized_color = (color - mean) / std
+            normalized_color = (color_tensor - mean) / std
             replacement_image = normalized_color.expand(-1, height, width)  # [3, H, W]
 
         else:
@@ -151,7 +151,7 @@ class ModelPredictor:
 
         return replacement_image
 
-    def plot_image_mean_color(self, input_tensor):
+    def plot_image_mean_color(self, input_tensor: torch.Tensor) -> None:
         normalized_mean = self.calculate_image_mean_color(input_tensor).unsqueeze(0)
         plt.imshow(normalized_mean[0].permute(1, 2, 0))
         plt.show()
@@ -174,7 +174,7 @@ def create_surrogate_dataset(
     predictor: ModelPredictor,
     input_batch: torch.Tensor,
     segments: np.ndarray,
-    graph,  # NetworkX graph
+    graph: nx.Graph,
     target_class_idx: int,
     neighborhood_distance: int = 1,
     batch_size: int = 16,
@@ -381,12 +381,12 @@ def calculate_hyperpixel_deltas(
 
 
 def select_top_hyperpixels(
-    hyperpixels: list[dict], max_hyperpixels: int = 10
-) -> list[dict]:
+    hyperpixels: list[dict[str, object]], max_hyperpixels: int = 10
+) -> list[dict[str, object]]:
     """Select top hyperpixels by their primary algorithm-specific score."""
     # Use hyperpixel_score
     return sorted(
         hyperpixels,
-        key=lambda hp: abs(hp.get("hyperpixel_score", 0)),
+        key=lambda hp: abs(hp.get("hyperpixel_score", 0)),  # type: ignore[arg-type]
         reverse=True,
     )[:max_hyperpixels]

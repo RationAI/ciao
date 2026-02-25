@@ -22,10 +22,10 @@ class MCTSNode:
         self.prior_score = prior_score
         self.frontier_cache: int | None = None
 
-    def mean_value(self):
+    def mean_value(self) -> float:
         return self.value_sum / self.visits if self.visits > 0 else 0.0
 
-    def rave_mean(self):
+    def rave_mean(self) -> float:
         return self.rave_value_sum / self.rave_visits if self.rave_visits > 0 else 0.0
 
 
@@ -45,7 +45,7 @@ class MCGSNode:
         self.max_value = -float("inf")
         self.pending = 0  # virtual loss counter (for non-RAVE modes)
 
-    def init_edge(self, action: int):
+    def init_edge(self, action: int) -> None:
         if action not in self.edge_stats:
             self.edge_stats[action] = {
                 "N": 0,

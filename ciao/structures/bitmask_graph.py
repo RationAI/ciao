@@ -5,6 +5,7 @@ represented as integer bitmasks, where each bit represents a node/segment.
 """
 
 import random
+from collections.abc import Iterator
 
 import numpy as np
 
@@ -14,7 +15,7 @@ def mask_to_ids(mask: int) -> list[int]:
     return [i for i in range(mask.bit_length()) if (mask >> i) & 1]
 
 
-def iter_bits(mask: int):
+def iter_bits(mask: int) -> Iterator[int]:
     """Iterate over set bits in a mask using low-bit isolation.
 
     Yields node IDs in arbitrary order (depends on bit positions).

@@ -150,7 +150,7 @@ def select_uct_child_rave(
 
 def expand_node_eager(
     node: MCGSNode,
-    adj_masks: tuple,
+    adj_masks: tuple[int, ...],
     used_mask: int,
     transposition_table: dict[int, MCGSNode],
     mode: str,
@@ -209,7 +209,7 @@ def expand_node_eager(
     return seg_id, child
 
 
-def update_edge_stats(node: MCGSNode, action: int, reward: float):
+def update_edge_stats(node: MCGSNode, action: int, reward: float) -> None:
     """Update edge statistics for a specific action (RAVE mode)."""
     if action not in node.edge_stats:
         node.init_edge(action)
@@ -221,7 +221,7 @@ def update_edge_stats(node: MCGSNode, action: int, reward: float):
     stats["max_reward"] = max(stats["max_reward"], reward)
 
 
-def update_rave_stats(node: MCGSNode, action: int, reward: float):
+def update_rave_stats(node: MCGSNode, action: int, reward: float) -> None:
     """Update RAVE statistics for a specific action (RAVE mode)."""
     if action not in node.rave_stats:
         node.init_edge(action)
@@ -278,7 +278,7 @@ def backup_paths_rave(
     batch_actions: list[list[int]],
     batch_masks: list[int],
     rewards: list[float],
-    adj_masks: tuple,
+    adj_masks: tuple[int, ...],
     used_mask: int,
 ) -> None:
     """Backup rewards using edge-level statistics and RAVE updates (RAVE mode).
@@ -406,8 +406,9 @@ def build_hyperpixel_mcgs(
         # --- PHASE 1: BATCH COLLECTION ---
         batch_paths = []
         batch_masks = []
-        cached_rewards = []  # Store cached values for visited terminals
-        needs_gpu_eval = []  # Track which entries need GPU evaluation
+        cached_rewards: list[
+            float | None
+        ] = []  # Store cached values for visited terminals
         batch_actions = []  # For RAVE mode: track actions taken
 
         for _ in range(batch_size):
@@ -469,7 +470,6 @@ def build_hyperpixel_mcgs(
             ):
                 rollout_mask = node.mask
                 cached_rewards.append(node.max_value)
-                needs_gpu_eval.append(False)
             else:
                 if is_terminal(node.mask, adj_masks, used_mask, desired_length):
                     rollout_mask = node.mask
@@ -485,7 +485,6 @@ def build_hyperpixel_mcgs(
                     )
 
                 cached_rewards.append(None)
-                needs_gpu_eval.append(True)
 
             batch_paths.append(path)
             batch_masks.append(rollout_mask)
@@ -495,12 +494,12 @@ def build_hyperpixel_mcgs(
         # Separate masks that need GPU evaluation from cached ones
         masks_to_evaluate = [
             (i, batch_masks[i])
-            for i, need_eval in enumerate(needs_gpu_eval)
-            if need_eval
+            for i, reward in enumerate(cached_rewards)
+            if reward is None
         ]
 
         # Update statistics
-        cache_hits = sum(1 for need_eval in needs_gpu_eval if not need_eval)
+        cache_hits = batch_size - len(masks_to_evaluate)
         total_cache_hits += cache_hits
         total_gpu_evaluations += len(masks_to_evaluate)
 
@@ -514,13 +513,13 @@ def build_hyperpixel_mcgs(
             gpu_rewards = [r * optimization_sign for r in raw_rewards]
 
         # Merge GPU results with cached values (cached values are already signed)
-        batch_rewards = []
+        batch_rewards: list[float] = []
         gpu_idx = 0
-        for i in range(batch_size):
-            if not needs_gpu_eval[i]:
-                batch_rewards.append(cached_rewards[i])
+
+        for cached_val in cached_rewards:
+            if cached_val is not None:
+                batch_rewards.append(cached_val)
             else:
-                # Use GPU result
                 batch_rewards.append(gpu_rewards[gpu_idx])
                 gpu_idx += 1
 
@@ -581,28 +580,28 @@ def build_hyperpixel_mcgs(
 
     # Add RAVE-specific data
     if mode == "rave":
-        result["stats"]["rave_k"] = rave_k
+        result["stats"]["rave_k"] = rave_k  # type: ignore[index]
 
     return result
 
 
 def build_all_hyperpixels_mcgs(
-    predictor,
-    input_batch,
-    segments,
-    adj_masks,
-    target_class_idx,
-    scores,
-    next_id,
-    max_hyperpixels=10,
-    desired_length=30,
-    num_iterations=100,
-    mode="standard",
-    batch_size=64,
-    exploration_c=1.4,
-    virtual_loss=1.0,
-    rave_k=1000.0,
-):
+    predictor: ModelPredictor,
+    input_batch: torch.Tensor,
+    segments: np.ndarray,
+    adj_masks: tuple[int, ...],
+    target_class_idx: int,
+    scores: dict[int, float],
+    next_id: int,
+    max_hyperpixels: int = 10,
+    desired_length: int = 30,
+    num_iterations: int = 100,
+    mode: str = "standard",
+    batch_size: int = 64,
+    exploration_c: float = 1.4,
+    virtual_loss: float = 1.0,
+    rave_k: float = 1000.0,
+) -> list[dict[str, object]]:
     """Build multiple hyperpixels using MCGS.
 
     Args:

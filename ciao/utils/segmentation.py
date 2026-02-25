@@ -2,9 +2,10 @@ import math
 
 import networkx as nx
 import numpy as np
+import torch
 
 
-def hex_round(q, r):
+def hex_round(q: float, r: float) -> tuple[int, int]:
     """Round axial coordinates to nearest hex.
 
     Args:
@@ -36,7 +37,7 @@ def hex_round(q, r):
     return int(rx), int(rz)  # back to axial (q = x, r = z)
 
 
-def pixel_to_hex(px, py, size):
+def pixel_to_hex(px: float, py: float, size: float) -> tuple[int, int]:
     """Convert pixel coordinate to axial hex coordinates.
 
     Args:
@@ -52,7 +53,7 @@ def pixel_to_hex(px, py, size):
     return hex_round(q, r)
 
 
-def build_hex_adjacency_graph(hex_to_id):
+def build_hex_adjacency_graph(hex_to_id: dict[tuple[int, int], int]) -> nx.Graph:
     """Build adjacency graph for hexagonal grid using axial coordinate neighbors.
 
     Hexagons have exactly 6 neighbors with well-defined axial coordinate offsets:
@@ -87,7 +88,7 @@ def build_hex_adjacency_graph(hex_to_id):
     return adj_graph
 
 
-def build_adjacency_graph(segments, neighborhood=8):
+def build_adjacency_graph(segments: np.ndarray, neighborhood: int = 8) -> nx.Graph:
     adj_graph = nx.Graph()
     segment_ids = np.unique(segments)
     adj_graph.add_nodes_from(segment_ids)
@@ -122,7 +123,9 @@ def build_adjacency_graph(segments, neighborhood=8):
     return adj_graph
 
 
-def build_fast_adjacency_list(hex_to_id, max_id):
+def build_fast_adjacency_list(
+    hex_to_id: dict[tuple[int, int], int], max_id: int
+) -> tuple[tuple[int, ...], ...]:
     """Create a static adjacency list optimized for fast reading.
 
     Args:
@@ -135,7 +138,7 @@ def build_fast_adjacency_list(hex_to_id, max_id):
     """
     # Initialize empty lists for each ID
     # Use list of lists for construction
-    temp_adj = [[] for _ in range(max_id)]
+    temp_adj: list[list[int]] = [[] for _ in range(max_id)]
 
     # Offsets for neighbors (axial coords)
     hex_neighbors = [(+1, 0), (+1, -1), (0, -1), (-1, 0), (-1, +1), (0, +1)]
@@ -159,7 +162,9 @@ def build_fast_adjacency_list(hex_to_id, max_id):
 # --- Modified create_hexagonal_grid function ---
 
 
-def create_hexagonal_grid_with_list(input_tensor, hex_radius=14):
+def create_hexagonal_grid_with_list(
+    input_tensor: torch.Tensor, hex_radius: int = 14
+) -> tuple[np.ndarray, tuple[tuple[int, ...], ...], int]:
     _channels, height, width = input_tensor.shape
     segments = np.zeros((height, width), dtype=np.int32)
 
@@ -185,7 +190,7 @@ def create_hexagonal_grid_with_list(input_tensor, hex_radius=14):
     return segments, adjacency_list, next_id
 
 
-def build_adjacency_bitmasks(adj_list):
+def build_adjacency_bitmasks(adj_list: tuple[tuple[int, ...], ...]) -> tuple[int, ...]:
     """Convert adjacency list to a list of integers.
 
     adj_masks[5] will be an integer with bits set at positions of hex 5's neighbors.
@@ -199,7 +204,9 @@ def build_adjacency_bitmasks(adj_list):
     return tuple(adj_masks)
 
 
-def create_square_grid(input_tensor, square_size=14, neighborhood=8):
+def create_square_grid(
+    input_tensor: torch.Tensor, square_size: int = 14, neighborhood: int = 8
+) -> tuple[np.ndarray, nx.Graph]:
     """Create a grid of squares with graph structure representing spatial relationships."""
     _channels, height, width = input_tensor.shape
     segments = np.zeros((height, width), dtype=np.int32)
@@ -223,7 +230,9 @@ def create_square_grid(input_tensor, square_size=14, neighborhood=8):
     return segments, adjacency_graph
 
 
-def create_hexagonal_grid(input_tensor, hex_radius=14, neighborhood=6):
+def create_hexagonal_grid(
+    input_tensor: torch.Tensor, hex_radius: int = 14, neighborhood: int = 6
+) -> tuple[np.ndarray, nx.Graph]:
     """Create a grid of hexagons with graph structure representing spatial relationships.
 
     Uses axial coordinate system for precise hexagonal tiling (flat-top orientation).
@@ -264,8 +273,11 @@ def create_hexagonal_grid(input_tensor, hex_radius=14, neighborhood=6):
 
 
 def create_segmentation(
-    input_tensor, segmentation_type="hexagonal", segment_size=14, neighborhood=8
-):
+    input_tensor: torch.Tensor,
+    segmentation_type: str = "hexagonal",
+    segment_size: int = 14,
+    neighborhood: int = 8,
+) -> tuple[np.ndarray, nx.Graph]:
     """Create image segmentation with specified type.
 
     Args:

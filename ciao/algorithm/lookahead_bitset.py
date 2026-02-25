@@ -1,7 +1,5 @@
-"""Greedy lookahead hyperpixel building with bitmask operations.
-
-Rolling horizon strategy: Look ahead multiple steps but only commit one step at a time.
-"""
+import numpy as np
+import torch
 
 from ciao.structures.bitmask_graph import (
     add_node,
@@ -9,23 +7,29 @@ from ciao.structures.bitmask_graph import (
     iter_bits,
     mask_to_ids,
 )
-from ciao.utils.calculations import calculate_hyperpixel_deltas
+from ciao.utils.calculations import ModelPredictor, calculate_hyperpixel_deltas
+
+
+"""Greedy lookahead hyperpixel building with bitmask operations.
+
+Rolling horizon strategy: Look ahead multiple steps but only commit one step at a time.
+"""
 
 
 def build_hyperpixel_greedy_lookahead(
-    predictor,
-    input_batch,
-    segments,
-    adj_masks: tuple,
+    predictor: ModelPredictor,
+    input_batch: torch.Tensor,
+    segments: np.ndarray,
+    adj_masks: tuple[int, ...],
     target_class_idx: int,
-    scores: dict,
+    scores: dict[int, float],
     seed_idx: int,
     desired_length: int,
     lookahead_distance: int,
     optimization_sign: int,
     used_mask: int,
     batch_size: int = 64,
-) -> dict:
+) -> dict[str, object]:
     """Build a single hyperpixel using greedy lookahead with rolling horizon.
 
     Strategy: Look ahead up to lookahead_distance steps, evaluate all candidates,
@@ -147,7 +151,7 @@ def build_hyperpixel_greedy_lookahead(
 
 def _generate_lookahead_candidates(
     current_mask: int,
-    adj_masks: tuple,
+    adj_masks: tuple[int, ...],
     used_mask: int,
     lookahead_distance: int,
     max_total_size: int,
@@ -157,7 +161,7 @@ def _generate_lookahead_candidates(
     Returns:
         Dict mapping candidate_mask -> first_step_segment
     """
-    candidates = {}  # mask -> first_step
+    candidates: dict[int, int] = {}  # mask -> first_step
 
     # BFS: Track masks at each depth
     current_depth_masks = {current_mask}
@@ -215,9 +219,9 @@ def _find_first_step(base_mask: int, target_mask: int) -> int:
 
 def _evaluate_prefixes(
     path: list[int],
-    predictor,
-    input_batch,
-    segments,
+    predictor: ModelPredictor,
+    input_batch: torch.Tensor,
+    segments: np.ndarray,
     target_class_idx: int,
     optimization_sign: int,
     batch_size: int,
@@ -252,17 +256,17 @@ def _evaluate_prefixes(
 
 
 def build_all_hyperpixels_greedy_lookahead(
-    predictor,
-    input_batch,
-    segments,
-    adj_masks: tuple,
+    predictor: ModelPredictor,
+    input_batch: torch.Tensor,
+    segments: np.ndarray,
+    adj_masks: tuple[int, ...],
     target_class_idx: int,
-    scores: dict,
+    scores: dict[int, float],
     max_hyperpixels: int,
     desired_length: int,
     lookahead_distance: int,
     batch_size: int = 64,
-) -> list[dict]:
+) -> list[dict[str, object]]:
     """Build multiple hyperpixels using greedy lookahead.
 
     Returns:
@@ -303,7 +307,7 @@ def build_all_hyperpixels_greedy_lookahead(
         )
 
         # Update used_mask
-        used_mask = result["mask"] | used_mask
+        used_mask = result["mask"] | used_mask  # type: ignore[operator]
 
         # Format for compatibility
         hyperpixel = {
@@ -316,9 +320,9 @@ def build_all_hyperpixels_greedy_lookahead(
         hyperpixels.append(hyperpixel)
 
         print(
-            f"Built hyperpixel with {len(result['segments'])} segments, score={result['score']:.4f}"
+            f"Built hyperpixel with {len(result['segments'])} segments, score={result['score']:.4f}"  # type: ignore[arg-type]
         )
 
     # Sort by absolute score
-    hyperpixels.sort(key=lambda x: abs(x["hyperpixel_score"]), reverse=True)
+    hyperpixels.sort(key=lambda x: abs(x["hyperpixel_score"]), reverse=True)  # type: ignore[arg-type]
     return hyperpixels
