@@ -51,7 +51,7 @@ class CIAOExplainer:
         batch_size: int = 64,
         neighborhood: int = 8,
         replacement: str = "mean_color",
-        replacement_kwargs: dict[str, Any] | None = None,
+        color: tuple[int, int, int] = (0, 0, 0),
         method_params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Generate CIAO explanation for an image.
@@ -74,7 +74,7 @@ class CIAOExplainer:
             batch_size: Batch size for model evaluation
             neighborhood: Adjacency neighborhood (6 or 8 for hexagonal)
             replacement: Masking strategy for model evaluation
-            replacement_kwargs: Additional kwargs for replacement method
+            color: RGB color tuple (0-255) for solid_color replacement mode
             method_params: Dictionary of method-specific parameters:
 
                 For "potential":
@@ -160,12 +160,8 @@ class CIAOExplainer:
             image_path, device=predictor.device
         )
 
-        # Handle replacement kwargs
-        if replacement_kwargs is None:
-            replacement_kwargs = {}
-
         predictor.replacement_image = predictor.get_replacement_image(
-            input_tensor, replacement, **replacement_kwargs
+            input_tensor, replacement, color
         ).to(predictor.device)
 
         # 2. Get target class
