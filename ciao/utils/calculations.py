@@ -17,7 +17,7 @@ class ModelPredictor:
         self.model = model
         self.class_names = class_names
         self.device = next(model.parameters()).device
-        self.replacement_image = None
+        self.replacement_image: torch.Tensor | None = None
 
         # Pre-compute normalization constants
         self.imagenet_mean = (
