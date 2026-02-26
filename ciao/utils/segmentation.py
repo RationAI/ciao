@@ -165,7 +165,7 @@ def build_fast_adjacency_list(
 
 def create_hexagonal_grid_with_list(
     input_tensor: torch.Tensor, hex_radius: int = 14
-) -> tuple[np.ndarray, tuple[tuple[int, ...], ...], int]:
+) -> tuple[np.ndarray, tuple[tuple[int, ...], ...]]:
     _channels, height, width = input_tensor.shape
     segments = np.zeros((height, width), dtype=np.int32)
 
@@ -188,7 +188,7 @@ def create_hexagonal_grid_with_list(
     # 2. Create fast graph (no NetworkX)
     adjacency_list = build_fast_adjacency_list(hex_to_id, next_id)
 
-    return segments, adjacency_list, next_id
+    return segments, adjacency_list
 
 
 def build_adjacency_bitmasks(adj_list: tuple[tuple[int, ...], ...]) -> tuple[int, ...]:
