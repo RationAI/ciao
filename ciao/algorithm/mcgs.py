@@ -259,6 +259,10 @@ def backup_paths(
         for i, node in enumerate(path):
             # Release virtual loss on root
             if i == 0:  # Root node
+                if node.pending <= 0:
+                    raise RuntimeError(
+                        f"Virtual loss underflow: root.pending={node.pending} (should be > 0)"
+                    )
                 node.pending -= 1
 
             # Update node statistics
@@ -318,6 +322,10 @@ def backup_paths_rave(
         for i, node in enumerate(path):
             # Release virtual loss on root
             if i == 0:  # Root node
+                if node.pending <= 0:
+                    raise RuntimeError(
+                        f"Virtual loss underflow: root.pending={node.pending} (should be > 0)"
+                    )
                 node.pending -= 1
 
             # --- STANDARD BACKUP ---

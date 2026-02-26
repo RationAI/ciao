@@ -43,7 +43,7 @@ class MCGSNode:
         self.visits = 0
         self.value_sum = 0.0
         self.max_value = -float("inf")
-        self.pending = 0  # virtual loss counter (for non-RAVE modes)
+        self.pending = 0  # virtual loss counter
 
     def init_edge(self, action: int) -> None:
         if action not in self.edge_stats:

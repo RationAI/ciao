@@ -223,7 +223,12 @@ def backup_paths(batch_paths: list[list[MCTSNode]], rewards: list[float]) -> Non
     """
     for path, reward in zip(batch_paths, rewards, strict=True):
         for node in path:
-            node.pending -= 1  # Release virtual loss
+            # Release virtual loss
+            if node.pending <= 0:
+                raise RuntimeError(
+                    f"Virtual loss underflow: node.pending={node.pending} (should be > 0)"
+                )
+            node.pending -= 1
             node.visits += 1
             node.value_sum += reward  # Mean tracking
             node.max_value = max(node.max_value, reward)  # MAX backup
@@ -264,7 +269,12 @@ def backup_paths_rave(
 
         for node in path:
             # --- STANDARD BACKUP ---
-            node.pending -= 1  # Release virtual loss
+            # Release virtual loss
+            if node.pending <= 0:
+                raise RuntimeError(
+                    f"Virtual loss underflow: node.pending={node.pending} (should be > 0)"
+                )
+            node.pending -= 1
             node.visits += 1
             node.value_sum += reward  # Mean tracking
             node.max_value = max(node.max_value, reward)  # MAX backup
