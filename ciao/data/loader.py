@@ -24,6 +24,11 @@ def get_image_loader(config: Any) -> Iterator[Path]:
     elif config.data.get("batch_path"):
         # Directory mode
         directory = Path(config.data.batch_path)
+        if not directory.is_dir():
+            raise ValueError(
+                f"batch_path must be a valid directory, got: {directory}. "
+                "Check for typos or incorrect path configuration."
+            )
         extensions = config.data.get(
             "image_extensions", [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
         )

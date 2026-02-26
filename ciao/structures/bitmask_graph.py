@@ -21,10 +21,22 @@ def iter_bits(mask: int) -> Iterator[int]:
     Yields node IDs in arbitrary order (depends on bit positions).
     Performance: O(k) where k is the number of set bits.
 
+    Args:
+        mask: Non-negative integer bitmask
+
+    Raises:
+        ValueError: If mask is negative
+
     Example:
         mask = 0b10110  # bits 1, 2, 4 are set
         list(iter_bits(mask))  # [1, 2, 4]
     """
+    if mask < 0:
+        raise ValueError(
+            f"mask must be non-negative, got {mask}. "
+            "Negative masks cause infinite loops due to two's complement representation."
+        )
+
     temp = mask
     while temp:
         low_bit = temp & -temp

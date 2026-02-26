@@ -1,5 +1,6 @@
 """CIAO explainer implementation."""
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -19,9 +20,12 @@ from ciao.utils.calculations import (
 )
 from ciao.utils.segmentation import (
     build_adjacency_bitmasks,
-    create_hexagonal_grid_with_list,
     create_segmentation,
+    graph_to_adjacency_list,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class CIAOExplainer:
@@ -112,6 +116,38 @@ class CIAOExplainer:
                 - class_name: Human-readable class name
                 - performance_mode: Method identifier
         """
+        # Input validation
+        valid_methods = [
+            "potential",
+            "mcts",
+            "mc_rave",
+            "lookahead",
+            "mcgs",
+            "mcgs_rave",
+        ]
+        if method not in valid_methods:
+            raise ValueError(
+                f"Invalid method: {method}. Valid options are: {', '.join(valid_methods)}"
+            )
+
+        if max_hyperpixels <= 0:
+            raise ValueError(f"max_hyperpixels must be positive, got {max_hyperpixels}")
+
+        if desired_length <= 0:
+            raise ValueError(f"desired_length must be positive, got {desired_length}")
+
+        if batch_size <= 0:
+            raise ValueError(f"batch_size must be positive, got {batch_size}")
+
+        if segment_size <= 0:
+            raise ValueError(f"segment_size must be positive, got {segment_size}")
+
+        if segmentation_type not in ["hexagonal", "square"]:
+            raise ValueError(
+                f"Invalid segmentation_type: {segmentation_type}. "
+                "Valid options are: 'hexagonal', 'square'"
+            )
+
         # Initialize method params with defaults
         if method_params is None:
             method_params = {}
@@ -135,7 +171,17 @@ class CIAOExplainer:
         # 2. Get target class
         if target_class_idx is None:
             target_class_idx = get_predicted_class(predictor, input_batch)
-            print(f"Auto-selected target class: {target_class_idx}")
+            logger.info(f"Auto-selected target class: {target_class_idx}")
+        else:
+            # Validate target_class_idx if provided
+            num_classes = len(class_names) if class_names else None
+            if num_classes and (
+                target_class_idx >= num_classes or target_class_idx < 0
+            ):
+                raise ValueError(
+                    f"target_class_idx {target_class_idx} is out of range. "
+                    f"Model has {num_classes} classes (indices 0-{num_classes - 1})"
+                )
 
         # 3. Create segmentation
         segments, graph = create_segmentation(
@@ -144,7 +190,7 @@ class CIAOExplainer:
             segment_size=segment_size,
             neighborhood=neighborhood,
         )
-        print(
+        logger.info(
             f"Built {segmentation_type} spatial graph with {graph.number_of_nodes()} "
             f"segments and {graph.number_of_edges()} edges"
         )
@@ -161,9 +207,9 @@ class CIAOExplainer:
         scores = calculate_scores_from_surrogate(X, y)
 
         # Create adjacency structures (needed by all methods)
-        segments_list, adj_list = create_hexagonal_grid_with_list(
-            input_tensor, segment_size
-        )
+        # Use the same segmentation for consistency between scoring and search
+        num_segments = graph.number_of_nodes()
+        adj_list = graph_to_adjacency_list(graph, num_segments)
         adj_masks = build_adjacency_bitmasks(adj_list)
 
         # Build hyperpixels based on method
@@ -171,7 +217,7 @@ class CIAOExplainer:
             hyperpixels = build_all_hyperpixels_potential(
                 predictor=predictor,
                 input_batch=input_batch,
-                segments=segments_list,
+                segments=segments,
                 adj_masks=adj_masks,
                 target_class_idx=target_class_idx,
                 scores=scores,
@@ -187,7 +233,7 @@ class CIAOExplainer:
             hyperpixels = build_all_hyperpixels_mcts(
                 predictor=predictor,
                 input_batch=input_batch,
-                segments=segments_list,
+                segments=segments,
                 adj_masks=adj_masks,
                 target_class_idx=target_class_idx,
                 scores=scores,
@@ -204,7 +250,7 @@ class CIAOExplainer:
             hyperpixels = build_all_hyperpixels_greedy_lookahead(
                 predictor=predictor,
                 input_batch=input_batch,
-                segments=segments_list,
+                segments=segments,
                 adj_masks=adj_masks,
                 target_class_idx=target_class_idx,
                 scores=scores,
@@ -221,7 +267,7 @@ class CIAOExplainer:
             hyperpixels = build_all_hyperpixels_mcgs(
                 predictor=predictor,
                 input_batch=input_batch,
-                segments=segments_list,
+                segments=segments,
                 adj_masks=adj_masks,
                 target_class_idx=target_class_idx,
                 scores=scores,
@@ -243,7 +289,7 @@ class CIAOExplainer:
         # Select top hyperpixels
         top_hyperpixels = select_top_hyperpixels(hyperpixels, max_hyperpixels)
 
-        print(f"Class name: {class_names[target_class_idx]}")
+        logger.info(f"Class name: {class_names[target_class_idx]}")
 
         # Return results
         result = {
@@ -260,7 +306,6 @@ class CIAOExplainer:
         }
         return result
 
-    # just a placeholder for now - can implement visualization later
     def visualize(
         self,
         image: torch.Tensor,
@@ -268,4 +313,18 @@ class CIAOExplainer:
         save_path: str | Path | None = None,
         interactive: bool = True,
     ) -> Any:
-        pass
+        """Visualize explanation results.
+
+        Args:
+            image: Input image tensor
+            explanation: Explanation dictionary from explain()
+            save_path: Optional path to save visualization
+            interactive: Whether to display interactive visualization
+
+        Raises:
+            NotImplementedError: This method is not yet implemented
+        """
+        raise NotImplementedError(
+            "The visualize method is not yet implemented. "
+            "Use external visualization tools or implement custom visualization based on the explanation data."
+        )

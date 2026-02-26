@@ -272,6 +272,27 @@ def create_hexagonal_grid(
     return segments, adjacency_graph
 
 
+def graph_to_adjacency_list(
+    graph: nx.Graph, num_segments: int
+) -> tuple[tuple[int, ...], ...]:
+    """Convert NetworkX graph to adjacency list format.
+
+    Args:
+        graph: NetworkX graph with segment IDs as nodes
+        num_segments: Total number of segments
+
+    Returns:
+        Tuple of tuples where adj_list[i] contains neighbors of segment i
+    """
+    temp_adj: list[list[int]] = [[] for _ in range(num_segments)]
+
+    for node in graph.nodes():
+        for neighbor in graph.neighbors(node):
+            temp_adj[node].append(neighbor)
+
+    return tuple(tuple(sorted(neighbors)) for neighbors in temp_adj)
+
+
 def create_segmentation(
     input_tensor: torch.Tensor,
     segmentation_type: str = "hexagonal",

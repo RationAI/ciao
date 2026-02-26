@@ -5,6 +5,7 @@ Mutual Information and greedy feature selection.
 """
 
 from ciao.explainer.ciao_explainer import CIAOExplainer
+from ciao.utils.calculations import ModelPredictor
 
 
-__all__ = ["CIAOExplainer"]
+__all__ = ["CIAOExplainer", "ModelPredictor"]

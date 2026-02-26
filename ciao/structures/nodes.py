@@ -1,9 +1,9 @@
-from typing import Optional
+from __future__ import annotations
 
 
 class MCTSNode:
     def __init__(
-        self, mask: int, parent: Optional["MCTSNode"] = None, prior_score: float = 0.0
+        self, mask: int, parent: MCTSNode | None = None, prior_score: float = 0.0
     ):
         self.mask = mask
         self.parent = parent
