@@ -53,7 +53,9 @@ def select_uct_child(
     best_action = None
     best_child = None
 
-    parent_visits = node.visits + 1  # +1 for numerical stability
+    parent_visits = (
+        node.visits + node.pending * virtual_loss + 1
+    )  # +1 for numerical stability
 
     for action, child in node.children.items():
         # Get edge statistics (with virtual loss)
@@ -103,7 +105,9 @@ def select_uct_child_rave(
     best_action = None
     best_child = None
 
-    parent_visits = node.visits + 1  # +1 for numerical stability
+    parent_visits = (
+        node.visits + node.pending * virtual_loss + 1
+    )  # +1 for numerical stability
 
     for action, child in node.children.items():
         # Get edge statistics (with virtual loss)
@@ -253,6 +257,10 @@ def backup_paths(
     """
     for path, actions, reward in zip(batch_paths, batch_actions, rewards, strict=True):
         for i, node in enumerate(path):
+            # Release virtual loss on root
+            if i == 0:  # Root node
+                node.pending -= 1
+
             # Update node statistics
             node.visits += 1
             node.value_sum += reward  # Mean tracking
@@ -308,6 +316,10 @@ def backup_paths_rave(
         rollout_segments = set(iter_bits(rollout_mask))
 
         for i, node in enumerate(path):
+            # Release virtual loss on root
+            if i == 0:  # Root node
+                node.pending -= 1
+
             # --- STANDARD BACKUP ---
             node.visits += 1
             node.value_sum += reward
@@ -416,6 +428,9 @@ def build_hyperpixel_mcgs(
             node = root
             path = [node]
             actions_taken = []  # Track actions for RAVE
+
+            # Apply virtual loss to root
+            root.pending += 1
 
             # Continue descending until we create a new node or reach terminal
             while (
@@ -592,7 +607,6 @@ def build_all_hyperpixels_mcgs(
     adj_masks: tuple[int, ...],
     target_class_idx: int,
     scores: dict[int, float],
-    next_id: int,
     max_hyperpixels: int = 10,
     desired_length: int = 30,
     num_iterations: int = 100,
@@ -611,7 +625,6 @@ def build_all_hyperpixels_mcgs(
         adj_masks: Adjacency bitmasks
         target_class_idx: Target class index
         scores: Individual segment scores
-        next_id: Total number of segments
         max_hyperpixels: Maximum number of hyperpixels to build
         desired_length: Target segments per hyperpixel
         num_iterations: Number of MCGS iterations
