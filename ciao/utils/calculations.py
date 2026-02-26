@@ -92,18 +92,19 @@ class ModelPredictor:
             replacement_image = mean_color.expand(-1, height, width)  # [3, H, W]
 
         elif replacement == "interlacing":
-            # Create interlaced pattern: even columns flipped vertically, then even indices flipped horizontally
+            # Create interlaced pattern: even columns flipped vertically, then even rows flipped horizontally
             replacement_image = input_tensor.clone()
-            even_indices = torch.arange(0, height, 2)  # Even row indices
+            even_row_indices = torch.arange(0, height, 2)  # Even row indices
+            even_col_indices = torch.arange(0, width, 2)  # Even column indices
 
             # Step 1: Flip even columns vertically (upside down)
-            replacement_image[:, :, even_indices] = torch.flip(
-                replacement_image[:, :, even_indices], dims=[1]
+            replacement_image[:, :, even_col_indices] = torch.flip(
+                replacement_image[:, :, even_col_indices], dims=[1]
             )
 
-            # Step 2: Flip even indices horizontally (left-right)
-            replacement_image[:, even_indices, :] = torch.flip(
-                replacement_image[:, even_indices, :], dims=[2]
+            # Step 2: Flip even rows horizontally (left-right)
+            replacement_image[:, even_row_indices, :] = torch.flip(
+                replacement_image[:, even_row_indices, :], dims=[2]
             )
 
         elif replacement == "blur":
