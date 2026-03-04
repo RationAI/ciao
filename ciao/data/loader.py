@@ -2,14 +2,15 @@
 
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+
+from omegaconf import DictConfig
 
 
 # Supported image formats
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 
 
-def get_image_loader(config: Any) -> Iterator[Path]:
+def get_image_loader(config: DictConfig) -> Iterator[Path]:
     """Create image loader based on configuration.
 
     Args:
@@ -20,10 +21,17 @@ def get_image_loader(config: Any) -> Iterator[Path]:
 
     Raises:
         ValueError: If neither image_path nor batch_path is specified
+        FileNotFoundError: If single image_path does not exist
     """
     if config.data.get("image_path"):
-        # Single image mode
-        yield Path(config.data.image_path)
+        # Single image mode - validate file exists
+        image_path = Path(config.data.image_path)
+        if not image_path.is_file():
+            raise FileNotFoundError(
+                f"image_path must be a valid file, got: {image_path}. "
+                "Check for typos or incorrect path configuration."
+            )
+        yield image_path
 
     elif config.data.get("batch_path"):
         # Directory mode - find all images with supported extensions
@@ -34,8 +42,10 @@ def get_image_loader(config: Any) -> Iterator[Path]:
                 "Check for typos or incorrect path configuration."
             )
 
-        for ext in IMAGE_EXTENSIONS:
-            yield from directory.glob(f"**/*{ext}")
+        # Single rglob pass with suffix filtering
+        for path in directory.rglob("*"):
+            if path.suffix.lower() in IMAGE_EXTENSIONS:
+                yield path
 
     else:
         raise ValueError("Must specify either image_path or batch_path in config")
