@@ -89,25 +89,28 @@ uv run python -m ciao
 ```
 ciao/
 ├── ciao/                           # Main package
-│   ├── algorithm/                  # Search algorithms
+│   ├── algorithm/                  # Search algorithms and data structures
 │   │   ├── mcts.py                 # Monte Carlo Tree Search
 │   │   ├── mcgs.py                 # Monte Carlo Graph Search
 │   │   ├── lookahead_bitset.py     # Greedy lookahead with bitsets
-│   │   └── potential.py            # Potential-based search
+│   │   ├── potential.py            # Potential-based search
+│   │   ├── bitmask_graph.py        # Bitset operations for hyperpixels
+│   │   ├── nodes.py                # Node classes for tree/graph search
+│   │   └── search_helpers.py       # Shared MCTS/MCGS helper functions
 │   ├── data/                       # Data loading and preprocessing
 │   │   ├── loader.py               # Image loaders
-│   │   └── preprocessing.py        # Image preprocessing utilities
+│   │   ├── preprocessing.py        # Image preprocessing utilities
+│   │   └── segmentation.py         # Segmentation utilities (hex/square grids)
+│   ├── evaluation/                 # Scoring and evaluation
+│   │   ├── surrogate.py            # Surrogate dataset creation and segment scoring
+│   │   └── hyperpixel.py           # Hyperpixel evaluation and selection
 │   ├── explainer/                  # Core explainer implementation
 │   │   └── ciao_explainer.py       # Main CIAO explainer class
-│   ├── structures/                 # Data structures
-│   │   ├── bitmask_graph.py        # Bitset operations for hyperpixels
-│   │   └── nodes.py                # Node classes for tree/graph search
-│   ├── utils/                      # Utility functions
-│   │   ├── calculations.py         # Score calculations and predictions
-│   │   ├── segmentation.py         # Segmentation utilities
-│   │   └── search_utils.py         # Search algorithm utilities
+│   ├── model/                      # Model inference and predictions
+│   │   └── predictor.py            # ModelPredictor class for inference
 │   ├── visualization/              # Visualization tools
-│   │   └── visualization.py        # Interactive visualizations
+│   │   ├── visualization.py        # Interactive visualizations
+│   │   └── visualize_tree.py       # Tree/graph visualization utilities
 │   └── __main__.py                 # CLI entry point
 ├── configs/                        # Hydra configuration files
 │   ├── ciao.yaml                   # Main entry point
