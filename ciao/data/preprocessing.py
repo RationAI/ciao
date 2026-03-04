@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import cast
 
 import torch
 import torchvision.transforms as transforms
@@ -31,7 +32,10 @@ def load_and_preprocess_image(
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    image = Image.open(image_path).convert("RGB")
-    input_tensor = preprocess(image).to(device)  # (3, 224, 224) - on correct device
+    # Use context manager to prevent file descriptor leaks
+    with Image.open(image_path) as img:
+        image = img.convert("RGB")
+        tensor = cast(torch.Tensor, preprocess(image))  # (3, 224, 224)
+        input_tensor = tensor.to(device)
 
     return input_tensor

@@ -81,19 +81,14 @@ def _build_square_adjacency_list(
     mask_h = left != right
     edges_h = np.column_stack([left[mask_h], right[mask_h]])
 
-    for seg1, seg2 in edges_h:
-        adjacency_sets[seg1].add(seg2)
-        adjacency_sets[seg2].add(seg1)
-
     # Vectorized vertical adjacency
     top = segments[:-1, :].ravel()
     bottom = segments[1:, :].ravel()
     mask_v = top != bottom
     edges_v = np.column_stack([top[mask_v], bottom[mask_v]])
 
-    for seg1, seg2 in edges_v:
-        adjacency_sets[seg1].add(seg2)
-        adjacency_sets[seg2].add(seg1)
+    # Collect all edges
+    edge_arrays = [edges_h, edges_v]
 
     if neighborhood == 8:
         # Vectorized diagonal adjacency (down-right)
@@ -102,19 +97,19 @@ def _build_square_adjacency_list(
         mask_dr = top_left != bottom_right
         edges_dr = np.column_stack([top_left[mask_dr], bottom_right[mask_dr]])
 
-        for seg1, seg2 in edges_dr:
-            adjacency_sets[seg1].add(seg2)
-            adjacency_sets[seg2].add(seg1)
-
         # Vectorized diagonal adjacency (down-left)
         top_right = segments[:-1, 1:].ravel()
         bottom_left = segments[1:, :-1].ravel()
         mask_dl = top_right != bottom_left
         edges_dl = np.column_stack([top_right[mask_dl], bottom_left[mask_dl]])
 
-        for seg1, seg2 in edges_dl:
-            adjacency_sets[seg1].add(seg2)
-            adjacency_sets[seg2].add(seg1)
+        edge_arrays.extend([edges_dr, edges_dl])
+
+    # Stack all edges together and populate adjacency sets in a single loop
+    all_edges = np.vstack(edge_arrays)
+    for seg1, seg2 in all_edges:
+        adjacency_sets[seg1].add(seg2)
+        adjacency_sets[seg2].add(seg1)
 
     # Convert to tuple of tuples
     return tuple(tuple(sorted(neighbors)) for neighbors in adjacency_sets)
@@ -228,12 +223,11 @@ def _create_hexagonal_grid(
     # Stack q and r to create unique keys
     qr_stacked = np.stack([q_int.ravel(), r_int.ravel()], axis=1)
 
-    # Use np.unique to assign segment IDs efficiently
-    _, segments_flat = np.unique(qr_stacked, axis=0, return_inverse=True)
+    # Use np.unique to assign segment IDs efficiently (compute only once)
+    unique_qr, segments_flat = np.unique(qr_stacked, axis=0, return_inverse=True)
     segments = segments_flat.reshape((height, width)).astype(np.int32)
 
     # Build hex_to_id mapping for adjacency construction
-    unique_qr = np.unique(qr_stacked, axis=0)
     hex_to_id = {(int(q), int(r)): idx for idx, (q, r) in enumerate(unique_qr)}
 
     # Build adjacency list using axial coordinate neighbors
@@ -267,6 +261,10 @@ def create_segmentation(
         )
 
     if segmentation_type == "square":
+        if neighborhood not in (4, 8):
+            raise ValueError(
+                f"For square segmentation, neighborhood must be 4 or 8, got {neighborhood}."
+            )
         segments, adjacency_list = _create_square_grid(
             input_tensor, square_size=segment_size, neighborhood=neighborhood
         )
