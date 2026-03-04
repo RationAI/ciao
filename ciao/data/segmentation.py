@@ -39,27 +39,6 @@ def _hex_round_vectorized(
     return rx.astype(np.int32), rz.astype(np.int32)
 
 
-def bitmasks_to_adjacency_list(
-    adj_masks: tuple[int, ...],
-) -> tuple[tuple[int, ...], ...]:
-    """Convert adjacency bitmasks back to adjacency list format.
-
-    Args:
-        adj_masks: Tuple of integer bitmasks where bit i indicates neighbor i
-
-    Returns:
-        Adjacency list as tuple of tuples of neighbor IDs
-    """
-    adjacency_list = []
-    for mask in adj_masks:
-        neighbors = []
-        for i in range(len(adj_masks)):
-            if mask & (1 << i):
-                neighbors.append(i)
-        adjacency_list.append(tuple(neighbors))
-    return tuple(adjacency_list)
-
-
 def _build_square_adjacency_list(
     segments: np.ndarray, neighborhood: int = 8
 ) -> tuple[tuple[int, ...], ...]:
