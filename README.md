@@ -29,13 +29,19 @@ uv sync
 Explain a single image with default settings:
 
 ```bash
-uv run python ciao
+uv run ciao
 ```
 
 Customize the explanation using Hydra configuration overrides:
 
 ```bash
-uv run python ciao data.image_path=./my_image.jpg explanation.method=mcts explanation.segment_size=8
+uv run ciao data.image_path=./my_image.jpg explanation.method=mcts explanation.segment_size=8
+```
+
+Alternatively, run as a module:
+
+```bash
+uv run python -m ciao
 ```
 
 ### Development Commands
@@ -45,7 +51,7 @@ uv run python ciao data.image_path=./my_image.jpg explanation.method=mcts explan
 - `uv run ruff check` - Run linting
 - `uv run ruff format` - Format code
 - `uv run mypy .` - Run type checking
-- `uv run python ciao` - Run CIAO with default configuration
+- `uv run ciao` - Run CIAO with default configuration
 - `uv run pytest tests` - Execute tests
 
 ## Method Details
@@ -78,7 +84,7 @@ uv run python ciao data.image_path=./my_image.jpg explanation.method=mcts explan
 - **Interlacing**: Interlaced pattern replacement
 - **Solid Color**: Replace with a specified solid color (RGB)
 
-## Project Structure
+## Proposed project Structure
 
 ```
 ciao/
