@@ -27,7 +27,6 @@ dependencies = [
 
     # Scientific computing
     "numpy>=1.21.0",
-    "networkx>=2.6.0",
 
     # Others
     "tqdm>=4.0.0",
