@@ -35,7 +35,7 @@ def load_and_preprocess_image(
     # Use context manager to prevent file descriptor leaks
     with Image.open(image_path) as img:
         image = img.convert("RGB")
-        tensor = cast(torch.Tensor, preprocess(image))  # (3, 224, 224)
+        tensor = cast("torch.Tensor", preprocess(image))  # (3, 224, 224)
         input_tensor = tensor.to(device)
 
     return input_tensor
