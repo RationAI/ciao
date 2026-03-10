@@ -23,9 +23,15 @@ def get_image_loader(config: DictConfig) -> Iterator[Path]:
         ValueError: If neither image_path nor batch_path is specified
         FileNotFoundError: If single image_path does not exist
     """
-    if config.data.get("image_path"):
+    image_path_value = config.data.get("image_path")
+    batch_path_value = config.data.get("batch_path")
+
+    if image_path_value and batch_path_value:
+        raise ValueError("Specify exactly one of image_path or batch_path in config")
+
+    if image_path_value:
         # Single image mode - validate file exists
-        image_path = Path(config.data.image_path)
+        image_path = Path(image_path_value)
         if not image_path.is_file():
             raise FileNotFoundError(
                 f"image_path must be a valid file, got: {image_path}. "
@@ -33,9 +39,9 @@ def get_image_loader(config: DictConfig) -> Iterator[Path]:
             )
         yield image_path
 
-    elif config.data.get("batch_path"):
+    elif batch_path_value:
         # Directory mode - find all images with supported extensions
-        directory = Path(config.data.batch_path)
+        directory = Path(batch_path_value)
         if not directory.is_dir():
             raise ValueError(
                 f"batch_path must be a valid directory, got: {directory}. "

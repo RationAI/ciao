@@ -114,6 +114,13 @@ def plot_image_mean_color(input_tensor: torch.Tensor) -> None:
     Note:
         The visualization shows the normalized tensor (ImageNet normalization).
     """
-    normalized_mean = calculate_image_mean_color(input_tensor).unsqueeze(0)
-    plt.imshow(normalized_mean[0].permute(1, 2, 0))
+    mean = IMAGENET_MEAN.view(3, 1, 1).to(
+        device=input_tensor.device, dtype=input_tensor.dtype
+    )
+    std = IMAGENET_STD.view(3, 1, 1).to(
+        device=input_tensor.device, dtype=input_tensor.dtype
+    )
+    normalized_mean = calculate_image_mean_color(input_tensor)
+    display_mean = ((normalized_mean * std) + mean).clamp(0, 1)
+    plt.imshow(display_mean.permute(1, 2, 0).detach().cpu())
     plt.show()
