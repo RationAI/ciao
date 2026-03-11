@@ -1,4 +1,5 @@
 import math
+from typing import Literal
 
 import numpy as np
 import torch
@@ -217,7 +218,7 @@ def _create_hexagonal_grid(
 
 def create_segmentation(
     input_tensor: torch.Tensor,
-    segmentation_type: str = "hexagonal",
+    segmentation_type: Literal["square", "hexagonal"] = "hexagonal",
     segment_size: int = 14,
     neighborhood: int = 8,
 ) -> tuple[np.ndarray, tuple[int, ...]]:
@@ -239,21 +240,23 @@ def create_segmentation(
             "Non-positive values cause division by zero or invalid range operations."
         )
 
+    if segmentation_type not in ("square", "hexagonal"):
+        raise ValueError(
+            f"Unknown segmentation_type: {segmentation_type}. Use 'square' or 'hexagonal'."
+        )
+
+    if segmentation_type == "square" and neighborhood not in (4, 8):
+        raise ValueError(
+            f"For square segmentation, neighborhood must be 4 or 8, got {neighborhood}."
+        )
+
     if segmentation_type == "square":
-        if neighborhood not in (4, 8):
-            raise ValueError(
-                f"For square segmentation, neighborhood must be 4 or 8, got {neighborhood}."
-            )
         segments, adjacency_list = _create_square_grid(
             input_tensor, square_size=segment_size, neighborhood=neighborhood
         )
-    elif segmentation_type == "hexagonal":
+    else:
         segments, adjacency_list = _create_hexagonal_grid(
             input_tensor, hex_radius=segment_size
-        )
-    else:
-        raise ValueError(
-            f"Unknown segmentation_type: {segmentation_type}. Use 'square' or 'hexagonal'."
         )
 
     # Convert adjacency list to bitmasks

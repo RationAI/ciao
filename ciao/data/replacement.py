@@ -1,8 +1,9 @@
 """Image replacement strategies for masking operations."""
 
+from typing import Literal
+
 import torch
 import torchvision.transforms.functional as TF
-from matplotlib import pyplot as plt
 
 
 # ImageNet normalization constants
@@ -39,7 +40,9 @@ def calculate_image_mean_color(input_tensor: torch.Tensor) -> torch.Tensor:
 
 def get_replacement_image(
     input_tensor: torch.Tensor,
-    replacement: str = "mean_color",
+    replacement: Literal[
+        "mean_color", "interlacing", "blur", "solid_color"
+    ] = "mean_color",
     color: tuple[int, int, int] = (0, 0, 0),
 ) -> torch.Tensor:
     """Generate replacement image for masking operations.
@@ -103,24 +106,3 @@ def get_replacement_image(
         raise ValueError(f"Unknown replacement strategy: {replacement}")
 
     return replacement_image
-
-
-def plot_image_mean_color(input_tensor: torch.Tensor) -> None:
-    """Display the mean color of the image.
-
-    Args:
-        input_tensor: Input tensor [3, H, W] (ImageNet normalized)
-
-    Note:
-        The visualization shows the normalized tensor (ImageNet normalization).
-    """
-    mean = IMAGENET_MEAN.view(3, 1, 1).to(
-        device=input_tensor.device, dtype=input_tensor.dtype
-    )
-    std = IMAGENET_STD.view(3, 1, 1).to(
-        device=input_tensor.device, dtype=input_tensor.dtype
-    )
-    normalized_mean = calculate_image_mean_color(input_tensor)
-    display_mean = ((normalized_mean * std) + mean).clamp(0, 1)
-    plt.imshow(display_mean.permute(1, 2, 0).detach().cpu())
-    plt.show()
