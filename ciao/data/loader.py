@@ -40,6 +40,10 @@ def iter_image_paths(config: DictConfig) -> Iterator[Path]:
                 f"image_path must be a valid file, got: {image_path}. "
                 "Check for typos or incorrect path configuration."
             )
+        if image_path.suffix.lower() not in IMAGE_EXTENSIONS:
+            raise ValueError(
+                f"image_path must use a supported image extension, got: {image_path}"
+            )
 
     if batch_path_value:
         directory = Path(batch_path_value)
@@ -50,8 +54,8 @@ def iter_image_paths(config: DictConfig) -> Iterator[Path]:
             )
 
     if image_path_value:
-        yield Path(image_path_value)
+        yield image_path
     else:
-        for path in Path(batch_path_value).rglob("*"):
-            if path.suffix.lower() in IMAGE_EXTENSIONS:
+        for path in directory.rglob("*"):
+            if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS:
                 yield path
