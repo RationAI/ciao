@@ -98,7 +98,7 @@ ciao/
 │   │   ├── nodes.py                # Node classes for tree/graph search
 │   │   └── search_helpers.py       # Shared MCTS/MCGS helper functions
 │   ├── data/                       # Data loading and preprocessing
-│   │   ├── loader.py               # Image loaders
+│   │   ├── loader.py               # Path loaders
 │   │   ├── preprocessing.py        # Image preprocessing utilities
 │   │   └── segmentation.py         # Segmentation utilities (hex/square grids)
 │   ├── evaluation/                 # Scoring and evaluation

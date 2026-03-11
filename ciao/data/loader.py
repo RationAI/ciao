@@ -1,4 +1,4 @@
-"""Simple image path loading utilities."""
+"""Simple image path resolution utilities."""
 
 from collections.abc import Iterator
 from pathlib import Path
@@ -10,18 +10,19 @@ from omegaconf import DictConfig
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 
 
-def get_image_loader(config: DictConfig) -> Iterator[Path]:
-    """Create image loader based on configuration.
+def iter_image_paths(config: DictConfig) -> Iterator[Path]:
+    """Generate paths to images based on configuration.
 
     Args:
-        config: Hydra config object
+        config: Hydra config object containing data.image_path or data.batch_path
 
     Returns:
-        Iterator of Path objects
+        Iterator of Path objects pointing to valid images
 
     Raises:
-        ValueError: If neither image_path nor batch_path is specified
+        ValueError: If config specifies both or neither paths
         FileNotFoundError: If single image_path does not exist
+        NotADirectoryError: If batch_path directory does not exist
     """
     image_path_value = config.data.get("image_path")
     batch_path_value = config.data.get("batch_path")
@@ -29,29 +30,28 @@ def get_image_loader(config: DictConfig) -> Iterator[Path]:
     if image_path_value and batch_path_value:
         raise ValueError("Specify exactly one of image_path or batch_path in config")
 
+    if not image_path_value and not batch_path_value:
+        raise ValueError("Must specify either image_path or batch_path in config")
+
     if image_path_value:
-        # Single image mode - validate file exists
         image_path = Path(image_path_value)
         if not image_path.is_file():
             raise FileNotFoundError(
                 f"image_path must be a valid file, got: {image_path}. "
                 "Check for typos or incorrect path configuration."
             )
-        yield image_path
 
-    elif batch_path_value:
-        # Directory mode - find all images with supported extensions
+    if batch_path_value:
         directory = Path(batch_path_value)
         if not directory.is_dir():
-            raise ValueError(
+            raise NotADirectoryError(
                 f"batch_path must be a valid directory, got: {directory}. "
                 "Check for typos or incorrect path configuration."
             )
 
-        # Single rglob pass with suffix filtering
-        for path in directory.rglob("*"):
+    if image_path_value:
+        yield Path(image_path_value)
+    else:
+        for path in Path(batch_path_value).rglob("*"):
             if path.suffix.lower() in IMAGE_EXTENSIONS:
                 yield path
-
-    else:
-        raise ValueError("Must specify either image_path or batch_path in config")
