@@ -49,7 +49,12 @@ def calculate_hyperpixel_deltas(
             f"got {tuple(replacement_image.shape)} vs expected {tuple(expected_shape)}"
         )
 
-    replacement_image = replacement_image.to(predictor.device)
+    # Move tensors to the predictor's device once to avoid repeated transfers.
+    # Align replacement_image dtype with input_batch to prevent torch.where errors.
+    input_batch = input_batch.to(predictor.device)
+    replacement_image = replacement_image.to(
+        device=predictor.device, dtype=input_batch.dtype
+    )
 
     with torch.no_grad():
         original_logit = predictor.get_class_logit_batch(input_batch, target_class_idx)[
@@ -65,22 +70,26 @@ def calculate_hyperpixel_deltas(
             batch_end = min(batch_start + batch_size, num_masks)
             current_batch_size = batch_end - batch_start
 
+            # Clone on GPU directly
             batch_inputs = input_batch.repeat(current_batch_size, 1, 1, 1)
 
-            for i, segment_ids in enumerate(
-                hyperpixel_segment_ids_list[batch_start:batch_end]
-            ):
+            # Fully vectorized mask creation
+            mask_list = []
+            for segment_ids in hyperpixel_segment_ids_list[batch_start:batch_end]:
                 target_ids = torch.tensor(
                     segment_ids, dtype=gpu_segments.dtype, device=predictor.device
                 )
-                combined_mask = torch.isin(gpu_segments, target_ids)
+                mask_list.append(torch.isin(gpu_segments, target_ids))
 
-                # Apply mask with proper broadcasting
-                batch_inputs[i] = torch.where(
-                    combined_mask.unsqueeze(0),
-                    replacement_image,
-                    batch_inputs[i],
-                )
+            # mask_tensor shape: [batch_size, H, W]
+            mask_tensor = torch.stack(mask_list)
+
+            # Apply masks using a single broadcasted operation
+            batch_inputs = torch.where(
+                mask_tensor.unsqueeze(1),  # [batch_size, 1, H, W]
+                replacement_image.unsqueeze(0),  # [1, C, H, W]
+                batch_inputs,  # [batch_size, C, H, W]
+            )
 
             masked_logits = predictor.get_class_logit_batch(
                 batch_inputs, target_class_idx
@@ -90,7 +99,7 @@ def calculate_hyperpixel_deltas(
             ]
             all_deltas.extend(batch_deltas)
 
-            del batch_inputs, masked_logits
+            del batch_inputs, masked_logits, mask_tensor
 
         return all_deltas
 
@@ -99,7 +108,6 @@ def select_top_hyperpixels(
     hyperpixels: list[dict[str, object]], max_hyperpixels: int = 10
 ) -> list[dict[str, object]]:
     """Select top hyperpixels by their primary algorithm-specific score."""
-    # Use hyperpixel_score
     return sorted(
         hyperpixels,
         key=lambda hp: abs(hp.get("hyperpixel_score", 0)),  # type: ignore[arg-type]

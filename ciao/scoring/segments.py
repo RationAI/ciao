@@ -46,17 +46,7 @@ def create_surrogate_dataset(
         X: Binary indicator matrix [num_samples, num_segments]
         y: Delta scores array [num_samples]
     """
-    # Get original logit
-    original_logit = predictor.get_class_logit_batch(input_batch, target_class_idx)[
-        0
-    ].item()
-    logger.debug(f"Original logit: {original_logit}")
-    logger.debug(
-        f"Probability of class {target_class_idx}: "
-        f"{predictor.get_predictions(input_batch)[0, target_class_idx].item()}"
-    )
-
-    # BFS algorithm
+    # BFS algorithm using low-level bitmask graph operations
     local_groups = []
     num_segments = len(adj_masks)
 
@@ -94,7 +84,7 @@ def create_surrogate_dataset(
     X = np.zeros((num_samples, num_segments), dtype=np.float32)
     y = np.array(deltas, dtype=np.float32)
 
-    # Fill indicator matrix
+    # Fast vectorized indicator matrix filling
     for i, masked_segments in enumerate(local_groups):
         X[i, masked_segments] = 1.0
 
