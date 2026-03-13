@@ -1,0 +1,146 @@
+import logging
+
+import numpy as np
+import torch
+
+from ciao.algorithm.bitmask_graph import get_frontier, iter_bits
+from ciao.model.predictor import ModelPredictor
+from ciao.scoring.hyperpixel import calculate_hyperpixel_deltas
+
+
+logger = logging.getLogger(__name__)
+
+
+def create_surrogate_dataset(
+    predictor: ModelPredictor,
+    input_batch: torch.Tensor,
+    replacement_image: torch.Tensor,
+    segments: np.ndarray,
+    adj_masks: tuple[int, ...],
+    target_class_idx: int,
+    neighborhood_distance: int = 1,
+    batch_size: int = 16,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Create surrogate dataset for interpretability.
+
+    Each row represents one masking operation:
+    - Features (X): Binary indicator vector [num_segments] - 1 if segment was masked, 0 otherwise
+    - Target (y): Delta score (original_logit - masked_logit)
+
+    This dataset can be used for:
+    - Computing segment importance scores
+    - Training interpretable models (like LIME does)
+    - Analyzing masking effects
+
+    Args:
+        predictor: ModelPredictor instance
+        input_batch: Input tensor batch
+        replacement_image: Replacement tensor [C, H, W]
+        segments: Pixel-to-segment mapping array [H, W]
+        adj_masks: Tuple of adjacency bitmasks where bit i indicates neighbor i
+        target_class_idx: Target class index
+        neighborhood_distance: Distance for neighborhood masking
+        batch_size: Batch size for processing segments
+
+    Returns:
+        X: Binary indicator matrix [num_samples, num_segments]
+        y: Delta scores array [num_samples]
+    """
+    # Get original logit
+    original_logit = predictor.get_class_logit_batch(input_batch, target_class_idx)[
+        0
+    ].item()
+    logger.debug(f"Original logit: {original_logit}")
+    logger.debug(
+        f"Probability of class {target_class_idx}: "
+        f"{predictor.get_predictions(input_batch)[0, target_class_idx].item()}"
+    )
+
+    # BFS algorithm
+    local_groups = []
+    num_segments = len(adj_masks)
+
+    for segment_id in range(num_segments):
+        visited_mask = 1 << segment_id
+        current_layer_mask = visited_mask
+
+        for _ in range(neighborhood_distance):
+            next_layer_mask = get_frontier(
+                mask=current_layer_mask, adj_masks=adj_masks, used_mask=visited_mask
+            )
+
+            # Early exit if we reached the boundary of the isolated graph component
+            if not next_layer_mask:
+                break
+
+            visited_mask |= next_layer_mask
+            current_layer_mask = next_layer_mask
+
+        local_groups.append(list(iter_bits(visited_mask)))
+
+    # Calculate deltas for all local groups
+    deltas = calculate_hyperpixel_deltas(
+        predictor,
+        input_batch,
+        segments,
+        local_groups,
+        replacement_image,
+        target_class_idx,
+        batch_size=batch_size,
+    )
+
+    # Create surrogate dataset
+    num_samples = len(local_groups)
+    X = np.zeros((num_samples, num_segments), dtype=np.float32)
+    y = np.array(deltas, dtype=np.float32)
+
+    # Fill indicator matrix
+    for i, masked_segments in enumerate(local_groups):
+        X[i, masked_segments] = 1.0
+
+    logger.info(f"Created surrogate dataset: X shape {X.shape}, y shape {y.shape}")
+    logger.info(f"Average delta: {y.mean():.4f}, std: {y.std():.4f}")
+
+    return X, y
+
+
+def calculate_segment_scores(X: np.ndarray, y: np.ndarray) -> dict[int, float]:  # noqa: N803
+    """Calculate neighborhood-smoothed segment importance scores from sampled deltas.
+
+    This function computes the mean delta score for each segment across all
+    surrogate samples where that segment was masked. It acts as a fast
+    approximation of the segment's marginal contribution to the prediction.
+
+    Args:
+        X: Binary indicator matrix of shape [num_samples, num_segments].
+           X[i, j] == 1 if segment j is masked in sample i, else 0.
+        y: Delta scores array of shape [num_samples].
+
+    Returns:
+        Dict mapping segment_id -> averaged importance score.
+
+    Raises:
+        ValueError: If any segment was never masked in the surrogate dataset.
+    """
+    # Vectorized count of how many times each segment was masked
+    counts = X.sum(axis=0)
+
+    # Fail-fast validation for unmasked segments
+    unmasked_indices = np.where(counts == 0)[0]
+    if unmasked_indices.size > 0:
+        raise ValueError(
+            f"Segment(s) {unmasked_indices.tolist()} never appear in any local group. "
+            "This suggests a bug in group generation or segment ID mapping."
+        )
+
+    # Vectorized mean calculation using matrix multiplication
+    segment_means = (y @ X) / counts
+
+    # Convert the numpy array results to the expected dictionary format
+    scores = {int(i): float(score) for i, score in enumerate(segment_means)}
+
+    if scores:
+        score_values = list(scores.values())
+        logger.info(f"Score range: [{min(score_values):.4f}, {max(score_values):.4f}]")
+
+    return scores
