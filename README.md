@@ -101,8 +101,8 @@ ciao/
 │   │   ├── loader.py               # Path loaders
 │   │   ├── preprocessing.py        # Image preprocessing utilities
 │   │   └── segmentation.py         # Segmentation utilities (hex/square grids)
-│   ├── evaluation/                 # Scoring and evaluation
-│   │   ├── surrogate.py            # Surrogate dataset creation and segment scoring
+│   ├── scoring/                    # Scoring
+│   │   ├── segments.py             # Surrogate dataset creation and segment scoring
 │   │   └── hyperpixel.py           # Hyperpixel evaluation and selection
 │   ├── explainer/                  # Core explainer implementation
 │   │   └── ciao_explainer.py       # Main CIAO explainer class
