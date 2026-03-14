@@ -7,7 +7,7 @@ and Monte Carlo Graph Search (MCGS) implementations.
 import numpy as np
 import torch
 
-from ciao.algorithm.bitmask_graph import get_frontier, iter_bits
+from ciao.algorithm.bitmask_graph import get_frontier, mask_to_ids
 from ciao.model.predictor import ModelPredictor
 from ciao.scoring.hyperpixel import calculate_hyperpixel_deltas
 
@@ -38,7 +38,7 @@ def evaluate_masks(
             "incorrect bit iteration due to two's complement representation."
         )
 
-    all_segment_ids = [list(iter_bits(mask)) for mask in masks]
+    all_segment_ids = [mask_to_ids(mask) for mask in masks]
 
     rewards = calculate_hyperpixel_deltas(
         predictor=predictor,
