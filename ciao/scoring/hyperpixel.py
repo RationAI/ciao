@@ -110,6 +110,6 @@ def select_top_hyperpixels(
     """Select top hyperpixels by their primary algorithm-specific score."""
     return sorted(
         hyperpixels,
-        key=lambda hp: abs(hp.get("hyperpixel_score", 0)),  # type: ignore[arg-type]
+        key=lambda hp: abs(hp["hyperpixel_score"]),  # type: ignore[arg-type]
         reverse=True,
     )[:max_hyperpixels]
