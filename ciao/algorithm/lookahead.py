@@ -175,6 +175,13 @@ def _generate_lookahead_candidates(
 ) -> dict[int, int]:
     """Generate all connected supersets up to lookahead_distance steps via BFS.
 
+    Args:
+        current_mask: Bitmask of the currently built hyperpixel.
+        adj_masks: Tuple of adjacency bitmasks for each segment in the image.
+        used_mask: Bitmask of globally excluded or already used segments.
+        lookahead_distance: Maximum depth for the BFS expansion.
+        desired_length: Maximum allowed total size of the candidate mask.
+
     Returns:
         Dict mapping candidate_mask -> first_step_segment_id
     """
