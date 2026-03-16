@@ -8,13 +8,14 @@ import numpy as np
 import torch
 
 from ciao.model.predictor import ModelPredictor
+from ciao.scoring.hyperpixel import HyperpixelResult
 
 
 logger = logging.getLogger(__name__)
 
 
 def build_all_hyperpixels(
-    builder_func: Callable[..., dict[str, Any]],
+    builder_func: Callable[..., HyperpixelResult],
     predictor: ModelPredictor,
     input_batch: torch.Tensor,
     segments: np.ndarray,
@@ -24,7 +25,7 @@ def build_all_hyperpixels(
     scores: dict[int, float],
     max_hyperpixels: int,
     **algo_kwargs: Any,
-) -> list[dict[str, Any]]:
+) -> list[HyperpixelResult]:
     """Build multiple hyperpixels using the provided single-hyperpixel algorithm.
 
     This function handles the outer loop for all search algorithms:
@@ -92,17 +93,10 @@ def build_all_hyperpixels(
                 f"Builder failed to generate any segments for seed {seed_idx}."
             )
 
-        hyperpixel = {
-            "segments": hyperpixel_segments,
-            "sign": optimization_sign,
-            "size": len(hyperpixel_segments),
-            "hyperpixel_score": result["score"],
-            "stats": result.get("stats", {}),
-        }
-        hyperpixels.append(hyperpixel)
+        hyperpixels.append(result)
         processed_segments.update(hyperpixel_segments)
 
     # Sort by absolute score
-    hyperpixels.sort(key=lambda x: abs(float(x["hyperpixel_score"])), reverse=True)
+    hyperpixels.sort(key=lambda x: abs(float(x["score"])), reverse=True)
 
     return hyperpixels

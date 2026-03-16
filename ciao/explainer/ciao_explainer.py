@@ -2,8 +2,9 @@
 
 import logging
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, TypedDict
 
+import numpy as np
 import torch
 
 from ciao.algorithm.builder import build_all_hyperpixels
@@ -12,6 +13,7 @@ from ciao.data.preprocessing import load_and_preprocess_image
 from ciao.data.replacement import get_replacement_image
 from ciao.data.segmentation import create_segmentation
 from ciao.model.predictor import ModelPredictor
+from ciao.scoring.hyperpixel import HyperpixelResult
 from ciao.scoring.segments import (
     calculate_segment_scores,
     create_surrogate_dataset,
@@ -19,6 +21,18 @@ from ciao.scoring.segments import (
 
 
 logger = logging.getLogger(__name__)
+
+
+class ExplanationResult(TypedDict):
+    """Artifacts, hyperpixels and metadata required to produce visualizations."""
+
+    input_batch: torch.Tensor
+    target_class_idx: int
+    segments: np.ndarray
+    scores: dict[int, float]
+    hyperpixels: list[HyperpixelResult]
+    class_name: str
+    performance_mode: str
 
 
 class CIAOExplainer:
@@ -48,7 +62,7 @@ class CIAOExplainer:
         ] = "mean_color",
         replacement_kwargs: dict[str, Any] | None = None,
         method_params: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    ) -> ExplanationResult:
         """Generate CIAO explanation for an image.
 
         Args:
@@ -165,7 +179,7 @@ class CIAOExplainer:
         logger.info(f"Explanation built for class: {class_name}")
 
         # Return results
-        result = {
+        result: ExplanationResult = {
             "input_batch": input_batch,
             "target_class_idx": target_class_idx,
             "segments": segments,
@@ -179,7 +193,7 @@ class CIAOExplainer:
     def visualize(
         self,
         image: torch.Tensor,
-        explanation: dict[str, Any],
+        explanation: ExplanationResult,
         save_path: str | Path | None = None,
         interactive: bool = True,
     ) -> Any:
