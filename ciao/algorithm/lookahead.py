@@ -137,7 +137,7 @@ def build_hyperpixel_greedy_lookahead(
         f"Built hyperpixel with {len(final_segments)} segments, final exact score={final_score:.4f}"
     )
 
-    return {
+    result: HyperpixelResult = {
         "mask": current_mask,
         "segments": final_segments,
         "sign": optimization_sign,
@@ -147,6 +147,7 @@ def build_hyperpixel_greedy_lookahead(
             "total_evaluations": total_evaluations,
         },
     }
+    return result
 
 
 def _generate_lookahead_candidates(
