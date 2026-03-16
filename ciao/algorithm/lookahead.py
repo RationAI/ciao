@@ -59,6 +59,7 @@ def build_hyperpixel_greedy_lookahead(
         Dict with segments, sign, score, final mask, and stats
     """
     current_mask = add_node(0, seed_idx)
+    known_final_score: float | None = None
     total_evaluations = 0
     num_steps = 0
 
@@ -111,6 +112,15 @@ def build_hyperpixel_greedy_lookahead(
         best_score = scores_list[best_idx]
         first_step = candidates[best_mask]
 
+        # Optimization
+        if best_mask.bit_count() == desired_length:
+            current_mask = best_mask
+            known_final_score = best_score
+            logger.debug(
+                f"Step {num_steps}: Lookahead reached desired length, committing entire path."
+            )
+            break
+
         logger.debug(
             f"Step {num_steps}: Best lookahead candidate score={best_score:.4f}, adding segment {first_step}"
         )
@@ -119,19 +129,25 @@ def build_hyperpixel_greedy_lookahead(
         # (it is an open question whether we should add only the first step or the entire best_mask)
         current_mask = add_node(current_mask, first_step)
 
-    # Re-evaluate the final built mask to get its exact score
-    # (since the last loop might have evaluated a lookahead candidate, not the exact current_mask)
     final_segments = mask_to_ids(current_mask)
-    final_score = calculate_hyperpixel_deltas(
-        predictor=predictor,
-        input_batch=input_batch,
-        segments=segments,
-        hyperpixel_segment_ids_list=[final_segments],
-        replacement_image=replacement_image,
-        target_class_idx=target_class_idx,
-        batch_size=1,
-    )[0]
-    total_evaluations += 1
+
+    # Re-evaluate the final built mask to get its exact score.
+    # Why? If the loop terminated early due to a dead end (no valid candidates),
+    # the exact current_mask was never evaluated (we only evaluated larger lookahead candidates).
+    if known_final_score is not None:
+        final_score = known_final_score
+    else:
+        logger.debug("Dead end reached. Re-evaluating the exact final mask.")
+        final_score = calculate_hyperpixel_deltas(
+            predictor=predictor,
+            input_batch=input_batch,
+            segments=segments,
+            hyperpixel_segment_ids_list=[final_segments],
+            replacement_image=replacement_image,
+            target_class_idx=target_class_idx,
+            batch_size=1,
+        )[0]
+        total_evaluations += 1
 
     logger.info(
         f"Built hyperpixel with {len(final_segments)} segments, final exact score={final_score:.4f}"
