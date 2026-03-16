@@ -16,7 +16,7 @@ from ciao.algorithm.bitmask_graph import (
     mask_to_ids,
 )
 from ciao.model.predictor import ModelPredictor
-from ciao.scoring.hyperpixel import calculate_hyperpixel_deltas
+from ciao.scoring.hyperpixel import HyperpixelResult, calculate_hyperpixel_deltas
 
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ def build_hyperpixel_greedy_lookahead(
     optimization_sign: int,
     used_mask: int,
     batch_size: int = 64,
-) -> dict[str, object]:
+) -> HyperpixelResult:
     """Build a single hyperpixel using greedy lookahead with rolling horizon.
 
     Strategy: Look ahead up to lookahead_distance steps, evaluate all candidates,
