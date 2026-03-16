@@ -90,6 +90,7 @@ uv run python -m ciao
 ciao/
 ├── ciao/                           # Main package
 │   ├── algorithm/                  # Search algorithms and data structures
+│   │   ├── builder.py              # Unified hyperpixel builder orchestrating searches
 │   │   ├── mcts.py                 # Monte Carlo Tree Search
 │   │   ├── mcgs.py                 # Monte Carlo Graph Search
 │   │   ├── lookahead.py            # Greedy lookahead
