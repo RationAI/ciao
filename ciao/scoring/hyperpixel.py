@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 
 from ciao.model.predictor import ModelPredictor
@@ -7,7 +6,7 @@ from ciao.model.predictor import ModelPredictor
 def calculate_hyperpixel_deltas(
     predictor: ModelPredictor,
     input_batch: torch.Tensor,
-    segments: np.ndarray,
+    segments: torch.Tensor,
     hyperpixel_segment_ids_list: list[list[int]],
     replacement_image: torch.Tensor,
     target_class_idx: int,
@@ -20,7 +19,7 @@ def calculate_hyperpixel_deltas(
     Args:
         predictor: ModelPredictor instance
         input_batch: Input tensor batch [1, C, H, W]
-        segments: Pixel-to-segment mapping array [H, W]
+        segments: Pixel-to-segment mapping tensor [H, W]
         hyperpixel_segment_ids_list: List of segment ID lists, e.g. [[1,2,3], [4,5,6]]
         replacement_image: Replacement tensor [C, H, W]
         target_class_idx: Target class index
@@ -59,12 +58,15 @@ def calculate_hyperpixel_deltas(
     with torch.no_grad():
         original_logit = predictor.get_class_logit_batch(input_batch, target_class_idx)[
             0
-        ].item()
+        ]
 
-        gpu_segments = torch.from_numpy(segments).to(predictor.device)
+        gpu_segments = segments.to(predictor.device)
 
         all_deltas = []
         num_masks = len(hyperpixel_segment_ids_list)
+
+        if batch_size <= 0:
+            raise ValueError(f"batch_size must be positive, got {batch_size}")
 
         for batch_start in range(0, num_masks, batch_size):
             batch_end = min(batch_start + batch_size, num_masks)
@@ -94,10 +96,8 @@ def calculate_hyperpixel_deltas(
             masked_logits = predictor.get_class_logit_batch(
                 batch_inputs, target_class_idx
             )
-            batch_deltas = [
-                original_logit - masked_logit.item() for masked_logit in masked_logits
-            ]
-            all_deltas.extend(batch_deltas)
+            batch_deltas_tensor = original_logit - masked_logits
+            all_deltas.extend(batch_deltas_tensor.tolist())
 
             del batch_inputs, masked_logits, mask_tensor
 

@@ -17,6 +17,9 @@ def iter_bits(mask: int) -> Iterator[int]:
         mask = 0b10110  # bits 1, 2, 4 are set
         list(iter_bits(mask))  # [1, 2, 4]
     """
+    if mask < 0:
+        raise ValueError("mask cannot be negative")
+
     temp = mask
     while temp:
         low_bit = temp & -temp
@@ -44,6 +47,9 @@ def get_frontier(mask: int, adj_masks: tuple[int, ...], used_mask: int) -> int:
     Returns:
         Bitmask of valid frontier segments
     """
+    if mask < 0 or used_mask < 0:
+        raise ValueError("mask and used_mask cannot be negative")
+
     frontier = 0
 
     for node_id in iter_bits(mask):

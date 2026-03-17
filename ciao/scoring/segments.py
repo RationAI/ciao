@@ -15,7 +15,7 @@ def create_surrogate_dataset(
     predictor: ModelPredictor,
     input_batch: torch.Tensor,
     replacement_image: torch.Tensor,
-    segments: np.ndarray,
+    segments: torch.Tensor,
     adj_masks: tuple[int, ...],
     target_class_idx: int,
     neighborhood_distance: int = 1,
@@ -36,7 +36,7 @@ def create_surrogate_dataset(
         predictor: ModelPredictor instance
         input_batch: Input tensor batch
         replacement_image: Replacement tensor [C, H, W]
-        segments: Pixel-to-segment mapping array [H, W]
+        segments: Pixel-to-segment mapping tensor [H, W]
         adj_masks: Tuple of adjacency bitmasks where bit i indicates neighbor i
         target_class_idx: Target class index
         neighborhood_distance: Distance for neighborhood masking
@@ -46,6 +46,9 @@ def create_surrogate_dataset(
         X: Binary indicator matrix [num_samples, num_segments]
         y: Delta scores array [num_samples]
     """
+    if neighborhood_distance < 0:
+        raise ValueError("neighborhood_distance cannot be negative")
+
     # BFS algorithm using low-level bitmask graph operations
     local_groups = []
     num_segments = len(adj_masks)

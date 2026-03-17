@@ -41,53 +41,54 @@ def _hex_round_vectorized(
 
 
 def _build_square_adjacency_list(
-    segments: np.ndarray, neighborhood: int = 8
+    segments: torch.Tensor, neighborhood: int = 8
 ) -> tuple[tuple[int, ...], ...]:
     """Build adjacency list from segment array (for square grids) using vectorized operations.
 
     Args:
-        segments: 2D array mapping pixels to segment IDs
+        segments: 2D tensor mapping pixels to segment IDs
         neighborhood: 4 or 8 connectivity
 
     Returns:
         Adjacency list as tuple of tuples
     """
-    num_segments = segments.max() + 1
+    num_segments = int(segments.max().item()) + 1
     adjacency_sets: list[set[int]] = [set() for _ in range(num_segments)]
 
     # Vectorized horizontal adjacency
-    left = segments[:, :-1].ravel()
-    right = segments[:, 1:].ravel()
+    left = segments[:, :-1].flatten()
+    right = segments[:, 1:].flatten()
     mask_h = left != right
-    edges_h = np.column_stack([left[mask_h], right[mask_h]])
+    edges_h = torch.column_stack([left[mask_h], right[mask_h]])
 
     # Vectorized vertical adjacency
-    top = segments[:-1, :].ravel()
-    bottom = segments[1:, :].ravel()
+    top = segments[:-1, :].flatten()
+    bottom = segments[1:, :].flatten()
     mask_v = top != bottom
-    edges_v = np.column_stack([top[mask_v], bottom[mask_v]])
+    edges_v = torch.column_stack([top[mask_v], bottom[mask_v]])
 
     # Collect all edges
     edge_arrays = [edges_h, edges_v]
 
     if neighborhood == 8:
         # Vectorized diagonal adjacency (down-right)
-        top_left = segments[:-1, :-1].ravel()
-        bottom_right = segments[1:, 1:].ravel()
+        top_left = segments[:-1, :-1].flatten()
+        bottom_right = segments[1:, 1:].flatten()
         mask_dr = top_left != bottom_right
-        edges_dr = np.column_stack([top_left[mask_dr], bottom_right[mask_dr]])
+        edges_dr = torch.column_stack([top_left[mask_dr], bottom_right[mask_dr]])
 
         # Vectorized diagonal adjacency (down-left)
-        top_right = segments[:-1, 1:].ravel()
-        bottom_left = segments[1:, :-1].ravel()
+        top_right = segments[:-1, 1:].flatten()
+        bottom_left = segments[1:, :-1].flatten()
         mask_dl = top_right != bottom_left
-        edges_dl = np.column_stack([top_right[mask_dl], bottom_left[mask_dl]])
+        edges_dl = torch.column_stack([top_right[mask_dl], bottom_left[mask_dl]])
 
         edge_arrays.extend([edges_dr, edges_dl])
 
     # Stack all edges together and populate adjacency sets in a single loop
-    all_edges = np.vstack(edge_arrays)
-    for seg1, seg2 in all_edges:
+    all_edges = torch.vstack(edge_arrays)
+    for edge in all_edges:
+        seg1, seg2 = edge[0].item(), edge[1].item()
         adjacency_sets[seg1].add(seg2)
         adjacency_sets[seg2].add(seg1)
 
@@ -147,10 +148,12 @@ def _build_adjacency_bitmasks(adj_list: tuple[tuple[int, ...], ...]) -> tuple[in
 
 def _create_square_grid(
     input_tensor: torch.Tensor, square_size: int = 14, neighborhood: int = 8
-) -> tuple[np.ndarray, tuple[tuple[int, ...], ...]]:
+) -> tuple[torch.Tensor, tuple[tuple[int, ...], ...]]:
     """Create a grid of squares with adjacency list representing spatial relationships."""
     _channels, height, width = input_tensor.shape
-    segments = np.zeros((height, width), dtype=np.int32)
+    segments = torch.zeros(
+        (height, width), dtype=torch.int32, device=input_tensor.device
+    )
 
     segment_id = 0
 
@@ -173,7 +176,7 @@ def _create_square_grid(
 
 def _create_hexagonal_grid(
     input_tensor: torch.Tensor, hex_radius: int = 14
-) -> tuple[np.ndarray, tuple[tuple[int, ...], ...]]:
+) -> tuple[torch.Tensor, tuple[tuple[int, ...], ...]]:
     """Create a grid of hexagons with adjacency list using vectorized operations.
 
     Uses axial coordinate system for precise hexagonal tiling (flat-top orientation).
@@ -184,7 +187,7 @@ def _create_hexagonal_grid(
         hex_radius: Hex size parameter (distance from center to flat edge, default: 14)
 
     Returns:
-        segments: 2D array mapping pixels to segment IDs
+        segments: 2D tensor mapping pixels to segment IDs
         adjacency_list: Tuple of tuples representing segment relationships
     """
     _channels, height, width = input_tensor.shape
@@ -205,7 +208,8 @@ def _create_hexagonal_grid(
 
     # Use np.unique to assign segment IDs efficiently (compute only once)
     unique_qr, segments_flat = np.unique(qr_stacked, axis=0, return_inverse=True)
-    segments = segments_flat.reshape((height, width)).astype(np.int32)
+    segments_np = segments_flat.reshape((height, width)).astype(np.int32)
+    segments = torch.tensor(segments_np, dtype=torch.int32, device=input_tensor.device)
 
     # Build hex_to_id mapping for adjacency construction
     hex_to_id = {(int(q), int(r)): idx for idx, (q, r) in enumerate(unique_qr)}
@@ -221,7 +225,7 @@ def create_segmentation(
     segmentation_type: Literal["square", "hexagonal"] = "hexagonal",
     segment_size: int = 14,
     neighborhood: int = 8,
-) -> tuple[np.ndarray, tuple[int, ...]]:
+) -> tuple[torch.Tensor, tuple[int, ...]]:
     """Create image segmentation with specified type.
 
     Args:
@@ -231,7 +235,7 @@ def create_segmentation(
         neighborhood: Neighborhood connectivity for squares (4, or 8)
 
     Returns:
-        segments: 2D array mapping pixels to segment IDs
+        segments: 2D tensor mapping pixels to segment IDs
         adj_masks: Tuple of integer bitmasks representing adjacency relationships
     """
     if segment_size <= 0:
