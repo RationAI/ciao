@@ -47,7 +47,11 @@ def create_surrogate_dataset(
         y: Delta scores array [num_samples]
     """
     if neighborhood_distance < 0:
-        raise ValueError("neighborhood_distance cannot be negative")
+        raise ValueError(
+            f"neighborhood_distance cannot be negative. Got {neighborhood_distance}."
+        )
+    if not adj_masks:
+        raise ValueError("adj_masks cannot be empty.")
 
     # BFS algorithm using low-level bitmask graph operations
     local_groups = []
