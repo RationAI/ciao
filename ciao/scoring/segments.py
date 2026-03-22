@@ -1,9 +1,10 @@
 import logging
 
 import numpy as np
+import numpy.typing as npt
 import torch
 
-from ciao.algorithm.bitmask_graph import get_frontier, iter_bits
+from ciao.algorithm.graph import get_frontier
 from ciao.model.predictor import ModelPredictor
 from ciao.scoring.hyperpixel import calculate_hyperpixel_deltas
 
@@ -16,11 +17,11 @@ def create_surrogate_dataset(
     input_batch: torch.Tensor,
     replacement_image: torch.Tensor,
     segments: torch.Tensor,
-    adj_masks: tuple[int, ...],
+    adj_superpixels: list[frozenset[int]],
     target_class_idx: int,
     neighborhood_distance: int = 1,
     batch_size: int = 16,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[npt.NDArray[np.int8], npt.NDArray[np.float32]]:
     """Create surrogate dataset for interpretability.
 
     Each row represents one masking operation:
@@ -37,7 +38,7 @@ def create_surrogate_dataset(
         input_batch: Input tensor batch
         replacement_image: Replacement tensor [C, H, W]
         segments: Pixel-to-segment mapping tensor [H, W]
-        adj_masks: Tuple of adjacency bitmasks where bit i indicates neighbor i
+        adj_superpixels: List of adjacency superpixels where each element indicates a neighboring superpixel
         target_class_idx: Target class index
         neighborhood_distance: Distance for neighborhood masking
         batch_size: Batch size for processing segments
@@ -50,30 +51,30 @@ def create_surrogate_dataset(
         raise ValueError(
             f"neighborhood_distance cannot be negative. Got {neighborhood_distance}."
         )
-    if not adj_masks:
-        raise ValueError("adj_masks cannot be empty.")
+    if not adj_superpixels:
+        raise ValueError("adj_superpixels cannot be empty.")
 
     # BFS algorithm using low-level bitmask graph operations
     local_groups = []
-    num_segments = len(adj_masks)
+    num_segments = len(adj_superpixels)
 
     for segment_id in range(num_segments):
-        visited_mask = 1 << segment_id
-        current_layer_mask = visited_mask
+        visited: set[int] = {segment_id}
+        current_layer: frozenset[int] = frozenset({segment_id})
 
         for _ in range(neighborhood_distance):
-            next_layer_mask = get_frontier(
-                mask=current_layer_mask, adj_masks=adj_masks, used_mask=visited_mask
+            next_layer = get_frontier(
+                current_layer, adj_superpixels, frozenset(visited)
             )
 
             # Early exit if we reached the boundary of the isolated graph component
-            if not next_layer_mask:
+            if not next_layer:
                 break
 
-            visited_mask |= next_layer_mask
-            current_layer_mask = next_layer_mask
+            visited |= next_layer
+            current_layer = next_layer
 
-        local_groups.append(list(iter_bits(visited_mask)))
+        local_groups.append(sorted(visited))
 
     # Calculate deltas for all local groups
     deltas = calculate_hyperpixel_deltas(
@@ -88,7 +89,7 @@ def create_surrogate_dataset(
 
     # Create surrogate dataset
     num_samples = len(local_groups)
-    X = np.zeros((num_samples, num_segments), dtype=np.float32)
+    X = np.zeros((num_samples, num_segments), dtype=np.int8)
     y = np.array(deltas, dtype=np.float32)
 
     # Fast vectorized indicator matrix filling
@@ -101,7 +102,10 @@ def create_surrogate_dataset(
     return X, y
 
 
-def calculate_segment_scores(X: np.ndarray, y: np.ndarray) -> dict[int, float]:  # noqa: N803
+def calculate_segment_scores(
+    X: npt.NDArray[np.int8],  # noqa: N803
+    y: npt.NDArray[np.float32],
+) -> dict[int, float]:
     """Calculate neighborhood-smoothed segment importance scores from sampled deltas.
 
     This function computes the mean delta score for each segment across all
@@ -123,7 +127,7 @@ def calculate_segment_scores(X: np.ndarray, y: np.ndarray) -> dict[int, float]: 
     counts = X.sum(axis=0)
 
     # Fail-fast validation for unmasked segments
-    unmasked_indices = np.where(counts == 0)[0]
+    unmasked_indices = np.asarray(counts == 0).nonzero()[0]
     if unmasked_indices.size > 0:
         raise ValueError(
             f"Segment(s) {unmasked_indices.tolist()} never appear in any local group. "
