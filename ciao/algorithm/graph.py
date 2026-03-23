@@ -20,7 +20,7 @@ class ImageGraph:
 
     def get_frontier(
         self,
-        current_segments: Set[int],
+        current_region: Set[int],
         used_segments: Set[int],
     ) -> frozenset[int]:
         """Compute the expansion frontier (valid neighbors) for graph traversal.
@@ -29,42 +29,42 @@ class ImageGraph:
         that can be added in the next step.
 
         A segment is in the frontier if:
-        - It is adjacent to at least one segment in the current segments
-        - It is NOT already in the current segments
+        - It is adjacent to at least one segment in the current region
+        - It is NOT already in the current region
         - It is NOT in the used_segments (respects global exclusion constraints)
 
         Args:
-            current_segments: Set of current segment IDs
+            current_region: Set of current segment IDs
             used_segments: Set of globally excluded segments
 
         Returns:
             Frozenset of valid frontier segments
         """
         neighbors: set[int] = set()
-        for node_id in current_segments:
+        for node_id in current_region:
             neighbors |= self.adj_list[node_id]
 
-        # Remove segments already in the current segments and used segments
-        frontier = frozenset(neighbors - current_segments - used_segments)
+        # Remove segments already in the current region and used segments
+        frontier = frozenset(neighbors - current_region - used_segments)
         return frontier
 
     def sample_connected_superset(
         self,
-        base_segments: Set[int],
+        base_region: Set[int],
         target_length: int,
         used_segments: Set[int],
     ) -> frozenset[int]:
         """Simulates a random walk to build a full hyperpixel.
 
         Args:
-            base_segments: Starting segments
+            base_region: Starting region
             target_length: Desired number of segments in the final set
             used_segments: Segments to avoid
 
         Returns:
             Frozenset representing the connected superset
         """
-        current_superset = set(base_segments)
+        current_superset = set(base_region)
 
         while len(current_superset) < target_length:
             frontier = self.get_frontier(current_superset, used_segments)
