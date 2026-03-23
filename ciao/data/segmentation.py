@@ -141,8 +141,8 @@ def _create_square_grid(
             segments[row:row_end, col:col_end] = segment_id
             segment_id += 1
 
-    adj_sets = _build_square_adjacency_list(segments, neighborhood=neighborhood)
-    return ImageGraph(segments=segments, adj_list=adj_sets)
+    adj_list = _build_square_adjacency_list(segments, neighborhood=neighborhood)
+    return ImageGraph(segments=segments, adj_list=adj_list)
 
 
 def _create_hexagonal_grid(
@@ -185,9 +185,9 @@ def _create_hexagonal_grid(
     hex_to_id = {(int(q), int(r)): idx for idx, (q, r) in enumerate(unique_qr)}
 
     # Build adjacency list using axial coordinate neighbors
-    adjacency_list = _build_hex_adjacency_list(hex_to_id, len(hex_to_id))
+    adj_list = _build_hex_adjacency_list(hex_to_id, len(hex_to_id))
 
-    return ImageGraph(segments=segments, adj_list=adjacency_list)
+    return ImageGraph(segments=segments, adj_list=adj_list)
 
 
 def create_segmentation(
