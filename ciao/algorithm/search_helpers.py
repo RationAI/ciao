@@ -4,41 +4,41 @@ This module contains common functions used by both Monte Carlo Tree Search (MCTS
 and Monte Carlo Graph Search (MCGS) implementations.
 """
 
-import numpy as np
 import torch
 
-from ciao.algorithm.bitmask_graph import get_frontier, mask_to_ids
+from ciao.algorithm.graph import ImageGraph
 from ciao.model.predictor import ModelPredictor
 from ciao.scoring.hyperpixel import calculate_hyperpixel_deltas
 
 
 def is_terminal(
-    mask: int, adj_masks: tuple[int, ...], used_mask: int, max_depth: int
+    current_region: frozenset[int],
+    image_graph: ImageGraph,
+    used_segments: frozenset[int],
+    max_depth: int,
 ) -> bool:
     """Check if state is terminal (max depth or no frontier)."""
-    return (
-        mask.bit_count() >= max_depth or get_frontier(mask, adj_masks, used_mask) == 0
+    return len(current_region) >= max_depth or not image_graph.get_frontier(
+        current_region, used_segments
     )
 
 
-def evaluate_masks(
+def evaluate_states(
     predictor: ModelPredictor,
     input_batch: torch.Tensor,
-    segments: np.ndarray,
+    segments: torch.Tensor,
     target_class_idx: int,
-    masks: list[int],
+    regions: list[frozenset[int]],
     replacement_image: torch.Tensor,
 ) -> list[float]:
-    """Evaluate multiple segment masks by computing class score deltas (batched)."""
-    # Guard against invalid masks (zero or negative)
-    if any(mask <= 0 for mask in masks):
+    """Evaluate multiple segment sets by computing class score deltas (batched)."""
+    # Guard against invalid segment sets (empty)
+    if any(not region for region in regions):
         raise ValueError(
-            "Cannot evaluate invalid mask: A mask must be a positive integer. "
-            "Zero masks contain no segments, and negative masks cause "
-            "incorrect bit iteration due to two's complement representation."
+            "Cannot evaluate empty segment set: A set must contain at least one segment."
         )
 
-    all_segment_ids = [mask_to_ids(mask) for mask in masks]
+    all_segment_ids = [list(region) for region in regions]
 
     rewards = calculate_hyperpixel_deltas(
         predictor=predictor,
