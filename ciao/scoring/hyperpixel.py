@@ -76,14 +76,13 @@ def _apply_masks(
 def _compute_batch_deltas(
     predictor: ModelPredictor,
     batch_inputs: torch.Tensor,
-    original_logit: float,
+    original_logit: torch.Tensor,
     target_class_idx: int,
 ) -> list[float]:
     """Run inference and return per-sample delta scores."""
     masked_logits = predictor.get_class_logit_batch(batch_inputs, target_class_idx)
-    deltas = [original_logit - ml.item() for ml in masked_logits]
-    del batch_inputs, masked_logits
-    return deltas
+    deltas_tensor = original_logit - masked_logits
+    return deltas_tensor.tolist()
 
 
 def calculate_hyperpixel_deltas(
@@ -120,9 +119,10 @@ def calculate_hyperpixel_deltas(
     )
 
     with torch.no_grad():
+        # Keep original_logit as a tensor to maintain vectorized operations
         original_logit = predictor.get_class_logit_batch(input_batch, target_class_idx)[
             0
-        ].item()
+        ]
 
         all_deltas: list[float] = []
         num_masks = len(hyperpixel_segment_ids_list)
