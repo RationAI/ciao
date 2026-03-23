@@ -90,7 +90,7 @@ def create_surrogate_dataset(
 
     # Fast vectorized indicator matrix filling
     for i, masked_segments in enumerate(local_groups):
-        X[i, masked_segments] = 1.0
+        X[i, masked_segments] = 1
 
     logger.info(f"Created surrogate dataset: X shape {X.shape}, y shape {y.shape}")
     logger.info(f"Average delta: {y.mean():.4f}, std: {y.std():.4f}")
