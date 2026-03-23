@@ -4,6 +4,8 @@ from typing import Literal
 import numpy as np
 import torch
 
+from ciao.algorithm.graph import ImageGraph
+
 
 def _hex_round_vectorized(
     q: np.ndarray, r: np.ndarray
@@ -123,7 +125,7 @@ def _build_hex_adjacency_list(
 
 def _create_square_grid(
     input_tensor: torch.Tensor, square_size: int = 14, neighborhood: int = 8
-) -> tuple[torch.Tensor, list[frozenset[int]]]:
+) -> ImageGraph:
     """Create a grid of squares with frozenset adjacency."""
     _channels, height, width = input_tensor.shape
     segments = torch.zeros(
@@ -140,12 +142,12 @@ def _create_square_grid(
             segment_id += 1
 
     adj_sets = _build_square_adjacency_list(segments, neighborhood=neighborhood)
-    return segments, adj_sets
+    return ImageGraph(segments=segments, adj_list=adj_sets)
 
 
 def _create_hexagonal_grid(
     input_tensor: torch.Tensor, hex_radius: int = 14
-) -> tuple[torch.Tensor, list[frozenset[int]]]:
+) -> ImageGraph:
     """Create a grid of hexagons with adjacency list using vectorized operations.
 
     Uses axial coordinate system for precise hexagonal tiling (flat-top orientation).
@@ -156,8 +158,7 @@ def _create_hexagonal_grid(
         hex_radius: Hex size parameter (distance from center to flat edge, default: 14)
 
     Returns:
-        segments: 2D tensor mapping pixels to segment IDs
-        adjacency_list: List of frozensets representing segment relationships
+        ImageGraph containing segments tensor and adjacency list
     """
     _channels, height, width = input_tensor.shape
 
@@ -186,7 +187,7 @@ def _create_hexagonal_grid(
     # Build adjacency list using axial coordinate neighbors
     adjacency_list = _build_hex_adjacency_list(hex_to_id, len(hex_to_id))
 
-    return segments, adjacency_list
+    return ImageGraph(segments=segments, adj_list=adjacency_list)
 
 
 def create_segmentation(
@@ -194,7 +195,7 @@ def create_segmentation(
     segmentation_type: Literal["square", "hexagonal"] = "hexagonal",
     segment_size: int = 14,
     neighborhood: int = 8,
-) -> tuple[torch.Tensor, list[frozenset[int]]]:
+) -> ImageGraph:
     """Create image segmentation with specified type.
 
     Args:
@@ -204,8 +205,7 @@ def create_segmentation(
         neighborhood: Neighborhood connectivity for squares (4, or 8)
 
     Returns:
-        segments: 2D tensor mapping pixels to segment IDs
-        adj_sets: List of frozensets representing adjacency relationships
+        ImageGraph containing segments and adjacency list
     """
     if segment_size <= 0:
         raise ValueError(

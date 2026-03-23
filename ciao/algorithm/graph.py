@@ -1,33 +1,77 @@
 """Graph utilities for segment manipulation using frozenset operations."""
 
+import random
+from dataclasses import dataclass
 
-def get_frontier(
-    current_superpixels: frozenset[int],
-    adj_superpixels: list[frozenset[int]],
-    used_superpixels: frozenset[int],
-) -> frozenset[int]:
-    """Compute the expansion frontier (valid neighbors) for graph traversal.
+import torch
 
-    The frontier is the set of segments adjacent to the current structure
-    that can be added in the next step.
 
-    A segment is in the frontier if:
-    - It is adjacent to at least one segment in the current superpixels
-    - It is NOT already in the current superpixels
-    - It is NOT in the used_superpixels (respects global exclusion constraints)
+@dataclass
+class ImageGraph:
+    """Graph representation of image segments and their adjacencies."""
 
-    Args:
-        current_superpixels: Set of current superpixel IDs
-        adj_superpixels: Tuple of neighbor frozensets (adj_superpixels[i] = neighbors of superpixel i)
-        used_superpixels: Set of globally excluded superpixels
+    segments: torch.Tensor
+    adj_list: list[frozenset[int]]
 
-    Returns:
-        Frozenset of valid frontier segments
-    """
-    neighbors: set[int] = set()
-    for node_id in current_superpixels:
-        neighbors |= adj_superpixels[node_id]
+    @property
+    def num_segments(self) -> int:
+        return len(self.adj_list)
 
-    # Remove segments already in the current superpixels and used segments
-    frontier = frozenset(neighbors - current_superpixels - used_superpixels)
-    return frontier
+    def get_frontier(
+        self,
+        current_segments: frozenset[int],
+        used_segments: frozenset[int],
+    ) -> frozenset[int]:
+        """Compute the expansion frontier (valid neighbors) for graph traversal.
+
+        The frontier is the set of segments adjacent to the current structure
+        that can be added in the next step.
+
+        A segment is in the frontier if:
+        - It is adjacent to at least one segment in the current segments
+        - It is NOT already in the current segments
+        - It is NOT in the used_segments (respects global exclusion constraints)
+
+        Args:
+            current_segments: Set of current segment IDs
+            used_segments: Set of globally excluded segments
+
+        Returns:
+            Frozenset of valid frontier segments
+        """
+        neighbors: set[int] = set()
+        for node_id in current_segments:
+            neighbors |= self.adj_list[node_id]
+
+        # Remove segments already in the current segments and used segments
+        frontier = frozenset(neighbors - current_segments - used_segments)
+        return frontier
+
+    def sample_connected_superset(
+        self,
+        base_segments: frozenset[int],
+        target_length: int,
+        used_segments: frozenset[int],
+    ) -> frozenset[int]:
+        """Simulates a random walk to build a full hyperpixel.
+
+        Args:
+            base_segments: Starting segments
+            target_length: Desired number of segments in the final set
+            used_segments: Segments to avoid
+
+        Returns:
+            Frozenset representing the connected superset
+        """
+        current_superset = set(base_segments)
+
+        while len(current_superset) < target_length:
+            frontier = self.get_frontier(frozenset(current_superset), used_segments)
+            if not frontier:
+                break  # Dead end, cannot expand further
+
+            # Pick a random neighbor and add it
+            chosen = random.choice(tuple(frontier))
+            current_superset.add(chosen)
+
+        return frozenset(current_superset)

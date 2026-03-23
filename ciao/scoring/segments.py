@@ -4,7 +4,7 @@ import numpy as np
 import numpy.typing as npt
 import torch
 
-from ciao.algorithm.graph import get_frontier
+from ciao.algorithm.graph import ImageGraph
 from ciao.model.predictor import ModelPredictor
 from ciao.scoring.hyperpixel import calculate_hyperpixel_deltas
 
@@ -16,8 +16,7 @@ def create_surrogate_dataset(
     predictor: ModelPredictor,
     input_batch: torch.Tensor,
     replacement_image: torch.Tensor,
-    segments: torch.Tensor,
-    adj_superpixels: list[frozenset[int]],
+    image_graph: ImageGraph,
     target_class_idx: int,
     neighborhood_distance: int = 1,
     batch_size: int = 16,
@@ -37,8 +36,7 @@ def create_surrogate_dataset(
         predictor: ModelPredictor instance
         input_batch: Input tensor batch
         replacement_image: Replacement tensor [C, H, W]
-        segments: Pixel-to-segment mapping tensor [H, W]
-        adj_superpixels: List of adjacency superpixels where each element indicates a neighboring superpixel
+        image_graph: ImageGraph instance with segments and adj_list
         target_class_idx: Target class index
         neighborhood_distance: Distance for neighborhood masking
         batch_size: Batch size for processing segments
@@ -51,21 +49,19 @@ def create_surrogate_dataset(
         raise ValueError(
             f"neighborhood_distance cannot be negative. Got {neighborhood_distance}."
         )
-    if not adj_superpixels:
-        raise ValueError("adj_superpixels cannot be empty.")
+    if not image_graph.adj_list:
+        raise ValueError("adj_list in image_graph cannot be empty.")
 
     # BFS algorithm using low-level bitmask graph operations
     local_groups = []
-    num_segments = len(adj_superpixels)
+    num_segments = image_graph.num_segments
 
     for segment_id in range(num_segments):
         visited: set[int] = {segment_id}
         current_layer: frozenset[int] = frozenset({segment_id})
 
         for _ in range(neighborhood_distance):
-            next_layer = get_frontier(
-                current_layer, adj_superpixels, frozenset(visited)
-            )
+            next_layer = image_graph.get_frontier(current_layer, frozenset(visited))
 
             # Early exit if we reached the boundary of the isolated graph component
             if not next_layer:
@@ -80,7 +76,7 @@ def create_surrogate_dataset(
     deltas = calculate_hyperpixel_deltas(
         predictor,
         input_batch,
-        segments,
+        image_graph.segments,
         local_groups,
         replacement_image,
         target_class_idx,
