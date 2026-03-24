@@ -52,7 +52,7 @@ def create_surrogate_dataset(
     if not image_graph.adj_list:
         raise ValueError("adj_list in image_graph cannot be empty.")
 
-    # BFS algorithm using low-level bitmask graph operations
+    # BFS algorithm
     local_groups = []
     num_segments = image_graph.num_segments
 

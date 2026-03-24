@@ -1,6 +1,7 @@
 """Graph utilities for segment manipulation using frozenset operations."""
 
 import random
+from collections.abc import Set
 from dataclasses import dataclass
 
 import torch

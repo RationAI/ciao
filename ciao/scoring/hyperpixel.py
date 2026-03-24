@@ -1,6 +1,15 @@
+from typing import TypedDict
+
 import torch
 
 from ciao.model.predictor import ModelPredictor
+
+
+class HyperpixelResult(TypedDict):
+    """Type definition for the output of hyperpixel building algorithms."""
+
+    region: frozenset[int]
+    score: float
 
 
 def _validate_hyperpixel_inputs(
@@ -144,14 +153,14 @@ def calculate_hyperpixel_deltas(
 
 
 def select_top_hyperpixels(
-    hyperpixels: list[dict[str, object]], max_hyperpixels: int = 10
-) -> list[dict[str, object]]:
+    hyperpixels: list[HyperpixelResult], max_hyperpixels: int = 10
+) -> list[HyperpixelResult]:
     """Select top hyperpixels by their primary algorithm-specific score."""
     if max_hyperpixels <= 0:
         raise ValueError(f"max_hyperpixels must be positive, got {max_hyperpixels}")
 
     return sorted(
         hyperpixels,
-        key=lambda hp: abs(hp["hyperpixel_score"]),  # type: ignore[arg-type]
+        key=lambda hp: abs(hp["score"]),
         reverse=True,
     )[:max_hyperpixels]
