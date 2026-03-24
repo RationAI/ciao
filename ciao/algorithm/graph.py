@@ -19,8 +19,8 @@ class ImageGraph:
 
     def get_frontier(
         self,
-        current_segments: frozenset[int],
-        used_segments: frozenset[int],
+        current_segments: Set[int],
+        used_segments: Set[int],
     ) -> frozenset[int]:
         """Compute the expansion frontier (valid neighbors) for graph traversal.
 
@@ -49,9 +49,9 @@ class ImageGraph:
 
     def sample_connected_superset(
         self,
-        base_segments: frozenset[int],
+        base_segments: Set[int],
         target_length: int,
-        used_segments: frozenset[int],
+        used_segments: Set[int],
     ) -> frozenset[int]:
         """Simulates a random walk to build a full hyperpixel.
 
@@ -66,7 +66,7 @@ class ImageGraph:
         current_superset = set(base_segments)
 
         while len(current_superset) < target_length:
-            frontier = self.get_frontier(frozenset(current_superset), used_segments)
+            frontier = self.get_frontier(current_superset, used_segments)
             if not frontier:
                 break  # Dead end, cannot expand further
 

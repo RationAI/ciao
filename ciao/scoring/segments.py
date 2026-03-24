@@ -61,7 +61,7 @@ def create_surrogate_dataset(
         current_layer: frozenset[int] = frozenset({segment_id})
 
         for _ in range(neighborhood_distance):
-            next_layer = image_graph.get_frontier(current_layer, frozenset(visited))
+            next_layer = image_graph.get_frontier(current_layer, visited)
 
             # Early exit if we reached the boundary of the isolated graph component
             if not next_layer:
