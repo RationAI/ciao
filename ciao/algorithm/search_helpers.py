@@ -4,6 +4,8 @@ This module contains common functions used by both Monte Carlo Tree Search (MCTS
 and Monte Carlo Graph Search (MCGS) implementations.
 """
 
+from collections.abc import Set
+
 import torch
 
 from ciao.algorithm.graph import ImageGraph
@@ -12,9 +14,9 @@ from ciao.scoring.hyperpixel import calculate_hyperpixel_deltas
 
 
 def is_terminal(
-    current_region: frozenset[int],
+    current_region: Set[int],
     image_graph: ImageGraph,
-    used_segments: frozenset[int],
+    used_segments: Set[int],
     max_depth: int,
 ) -> bool:
     """Check if state is terminal (max depth or no frontier)."""
@@ -23,12 +25,12 @@ def is_terminal(
     )
 
 
-def evaluate_states(
+def evaluate_regions(
     predictor: ModelPredictor,
     input_batch: torch.Tensor,
     segments: torch.Tensor,
     target_class_idx: int,
-    regions: list[frozenset[int]],
+    regions: list[Set[int]],
     replacement_image: torch.Tensor,
 ) -> list[float]:
     """Evaluate multiple segment sets by computing class score deltas (batched)."""
