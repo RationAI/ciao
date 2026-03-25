@@ -1,20 +1,15 @@
-"""Greedy lookahead hyperpixel building with bitmask operations.
+"""Greedy lookahead hyperpixel building with frozensets.
 
 Rolling horizon strategy: Look ahead multiple steps but only commit one step at a time.
 """
 
 import logging
 from collections import deque
+from collections.abc import Set
 
-import numpy as np
 import torch
 
-from ciao.algorithm.bitmask_graph import (
-    add_node,
-    get_frontier,
-    iter_bits,
-    mask_to_ids,
-)
+from ciao.algorithm.graph import ImageGraph
 from ciao.model.predictor import ModelPredictor
 from ciao.scoring.hyperpixel import HyperpixelResult, calculate_hyperpixel_deltas
 
@@ -25,15 +20,15 @@ logger = logging.getLogger(__name__)
 def build_hyperpixel_greedy_lookahead(
     predictor: ModelPredictor,
     input_batch: torch.Tensor,
-    segments: np.ndarray,
+    segments: torch.Tensor,
     replacement_image: torch.Tensor,
-    adj_masks: tuple[int, ...],
+    image_graph: ImageGraph,
     target_class_idx: int,
     seed_idx: int,
     desired_length: int,
     lookahead_distance: int,
     optimization_sign: int,
-    used_mask: int,
+    used_segments: frozenset[int],
     batch_size: int = 64,
 ) -> HyperpixelResult:
     """Build a single hyperpixel using greedy lookahead with rolling horizon.
@@ -44,61 +39,42 @@ def build_hyperpixel_greedy_lookahead(
     Args:
         predictor: Model predictor
         input_batch: Preprocessed image
-        segments: Segmentation map
+        segments: Segmentation map tensor
         replacement_image: Replacement tensor [C, H, W]
-        adj_masks: Adjacency bitmasks
+        image_graph: Graph representation of image segments and their adjacencies
         target_class_idx: Target class
         seed_idx: Starting segment
         desired_length: Target hyperpixel size
         lookahead_distance: How many steps to look ahead (1=greedy, 2+=lookahead)
         optimization_sign: +1 to maximize, -1 to minimize
-        used_mask: Globally excluded segments
+        used_segments: Globally excluded segments
         batch_size: Batch size for evaluation
 
     Returns:
-        Dict with segments, sign, score, final mask, and stats
+        HyperpixelResult containing region and score
     """
-    current_mask = add_node(0, seed_idx)
+    current_region = frozenset([seed_idx])
     known_final_score: float | None = None
-    total_evaluations = 0
-    num_steps = 0
-
-    logger.info(f"Starting greedy lookahead from seed {seed_idx}")
 
     # Grow hyperpixel one step at a time
-    while current_mask.bit_count() < desired_length:
-        num_steps += 1
-        current_size = current_mask.bit_count()
-
-        # Generate all candidate masks via BFS up to lookahead_distance
+    while len(current_region) < desired_length:
+        # Generate all candidate regions via BFS up to lookahead_distance
         candidates = _generate_lookahead_candidates(
-            current_mask=current_mask,
-            adj_masks=adj_masks,
-            used_mask=used_mask,
+            current_region=current_region,
+            image_graph=image_graph,
+            used_segments=used_segments,
             lookahead_distance=lookahead_distance,
             desired_length=desired_length,
         )
 
-        if not candidates:
-            logger.info(
-                f"Step {num_steps}: No candidates available, stopping at size {current_size}"
-            )
-            break
-
-        logger.debug(
-            f"Step {num_steps}: Size={current_size}/{desired_length}, evaluating {len(candidates)} candidates"
-        )
-
         # Batch evaluate all candidates
-        candidate_masks = list(candidates.keys())
-        segment_id_lists = [mask_to_ids(mask) for mask in candidate_masks]
-        total_evaluations += len(candidate_masks)
+        candidate_regions = list(candidates.keys())
 
         scores_list = calculate_hyperpixel_deltas(
             predictor=predictor,
             input_batch=input_batch,
             segments=segments,
-            hyperpixel_segment_ids_list=segment_id_lists,
+            segment_sets=candidate_regions,
             replacement_image=replacement_image,
             target_class_idx=target_class_idx,
             batch_size=batch_size,
@@ -108,110 +84,89 @@ def build_hyperpixel_greedy_lookahead(
         best_idx = max(
             range(len(scores_list)), key=lambda i: scores_list[i] * optimization_sign
         )
-        best_mask = candidate_masks[best_idx]
+        best_region = candidate_regions[best_idx]
         best_score = scores_list[best_idx]
-        first_step = candidates[best_mask]
+        first_step = candidates[best_region]
 
-        # Optimization
-        if best_mask.bit_count() == desired_length:
-            current_mask = best_mask
+        # Optimization - commit entire path
+        if len(best_region) == desired_length:
+            current_region = best_region
             known_final_score = best_score
-            logger.debug(
-                f"Step {num_steps}: Lookahead reached desired length, committing entire path."
-            )
             break
 
-        logger.debug(
-            f"Step {num_steps}: Best lookahead candidate score={best_score:.4f}, adding segment {first_step}"
-        )
-
         # Commit only the first step
-        # (it is an open question whether we should add only the first step or the entire best_mask)
-        current_mask = add_node(current_mask, first_step)
+        current_region = current_region | {first_step}
 
-    final_segments = mask_to_ids(current_mask)
-
-    # Re-evaluate the final built mask to get its exact score.
-    # Why? If the loop terminated early due to a dead end (no valid candidates),
-    # the exact current_mask was never evaluated (we only evaluated larger lookahead candidates).
+    # Re-evaluate the final built region to get its exact score.
     if known_final_score is not None:
         final_score = known_final_score
+    # This could happen if we exhausted all candidates before reaching desired_length
     else:
-        logger.debug("Dead end reached. Re-evaluating the exact final mask.")
         final_score = calculate_hyperpixel_deltas(
             predictor=predictor,
             input_batch=input_batch,
             segments=segments,
-            hyperpixel_segment_ids_list=[final_segments],
+            segment_sets=[current_region],
             replacement_image=replacement_image,
             target_class_idx=target_class_idx,
             batch_size=1,
         )[0]
-        total_evaluations += 1
-
-    logger.info(
-        f"Built hyperpixel with {len(final_segments)} segments, final exact score={final_score:.4f}"
-    )
 
     result: HyperpixelResult = {
-        "mask": current_mask,
-        "segments": final_segments,
-        "sign": optimization_sign,
+        "region": current_region,
         "score": final_score,
-        "size": len(final_segments),
-        "stats": {
-            "total_evaluations": total_evaluations,
-        },
     }
     return result
 
 
 def _generate_lookahead_candidates(
-    current_mask: int,
-    adj_masks: tuple[int, ...],
-    used_mask: int,
+    current_region: frozenset[int],
+    image_graph: ImageGraph,
+    used_segments: Set[int],
     lookahead_distance: int,
     desired_length: int,
-) -> dict[int, int]:
+) -> dict[frozenset[int], int]:
     """Generate all connected supersets up to lookahead_distance steps via BFS.
 
     Args:
-        current_mask: Bitmask of the currently built hyperpixel.
-        adj_masks: Tuple of adjacency bitmasks for each segment in the image.
-        used_mask: Bitmask of globally excluded or already used segments.
+        current_region: Frozenset of the currently built hyperpixel.
+        image_graph: Graph representation of image segments and their adjacencies.
+        used_segments: Set of globally excluded or already used segments.
         lookahead_distance: Maximum depth for the BFS expansion.
-        desired_length: Maximum allowed total size of the candidate mask.
+        desired_length: Maximum allowed total size of the candidate region.
 
     Returns:
-        Dict mapping candidate_mask -> first_step_segment_id
+        Dict mapping candidate_region -> first_step_segment_id
     """
-    candidates: dict[int, int] = {}  # mask -> first_step
+    candidates: dict[frozenset[int], int] = {}  # region -> first_step
 
-    # Queue stores tuples of: (current_mask, first_step_that_led_here, current_depth)
-    queue: deque[tuple[int, int | None, int]] = deque([(current_mask, None, 0)])
-    visited = {current_mask}
+    # Queue stores tuples of: (current_region, first_step_that_led_here, current_depth)
+    queue: deque[tuple[frozenset[int], int | None, int]] = deque(
+        [(current_region, None, 0)]
+    )
+    visited = {current_region}
 
     while queue:
-        mask, first_step, depth = queue.popleft()
+        region, first_step, depth = queue.popleft()
 
         # Store valid candidates (depth > 0)
-        if depth > 0 and first_step is not None and mask not in candidates:
+        if depth > 0 and first_step is not None and region not in candidates:
             # Only add if not already seen (shortest path wins)
-            candidates[mask] = first_step
+            candidates[region] = first_step
 
         # Stop expanding if we reached the lookahead limit or maximum size
-        if depth >= lookahead_distance or mask.bit_count() >= desired_length:
+        if depth >= lookahead_distance or len(region) >= desired_length:
             continue
 
-        frontier = get_frontier(mask, adj_masks, used_mask)
-        for seg_id in iter_bits(frontier):
-            new_mask = add_node(mask, seg_id)
+        frontier = image_graph.get_frontier(region, used_segments)
+        for seg_id in frontier:
+            new_region = frozenset(region | {seg_id})
 
-            if new_mask not in visited:
-                visited.add(new_mask)
+            if new_region not in visited:
+                visited.add(new_region)
                 # If at the first layer (depth 0), this seg_id is our first_step.
                 # Otherwise, pass along the first_step inherited from the parent.
                 next_first_step = seg_id if depth == 0 else first_step
-                queue.append((new_mask, next_first_step, depth + 1))
+                queue.append((new_region, next_first_step, depth + 1))
 
     return candidates
