@@ -1,3 +1,4 @@
+from collections.abc import Sequence, Set
 from typing import TypedDict
 
 import torch
@@ -15,13 +16,13 @@ class HyperpixelResult(TypedDict):
 def _validate_hyperpixel_inputs(
     input_batch: torch.Tensor,
     replacement_image: torch.Tensor,
-    hyperpixel_segment_ids_list: list[list[int]],
+    segment_sets: Sequence[Set[int]],
     batch_size: int,
 ) -> None:
     """Validate tensor shapes and parameters before delta computation."""
-    for i, segment_ids in enumerate(hyperpixel_segment_ids_list):
+    for i, segment_ids in enumerate(segment_sets):
         if not segment_ids:
-            raise ValueError(f"Empty segment list at index {i}")
+            raise ValueError(f"Empty segment set at index {i}")
 
     if input_batch.dim() != 4 or input_batch.shape[0] != 1:
         raise ValueError(
@@ -56,13 +57,15 @@ def _prepare_tensors_for_model(
 
 def _build_mask_tensor(
     gpu_segments: torch.Tensor,
-    segment_ids_slice: list[list[int]],
+    segment_ids_slice: Sequence[Set[int]],
     device: torch.device,
 ) -> torch.Tensor:
-    """Build a boolean mask tensor [batch, H, W] from segment ID lists."""
+    """Build a boolean mask tensor [batch, H, W] from segment ID sets."""
     mask_list = []
     for segment_ids in segment_ids_slice:
-        target_ids = torch.tensor(segment_ids, dtype=gpu_segments.dtype, device=device)
+        target_ids = torch.tensor(
+            list(segment_ids), dtype=gpu_segments.dtype, device=device
+        )
         mask_list.append(torch.isin(gpu_segments, target_ids))
     return torch.stack(mask_list)
 
@@ -98,7 +101,7 @@ def calculate_hyperpixel_deltas(
     predictor: ModelPredictor,
     input_batch: torch.Tensor,
     segments: torch.Tensor,
-    hyperpixel_segment_ids_list: list[list[int]],
+    segment_sets: Sequence[Set[int]],
     replacement_image: torch.Tensor,
     target_class_idx: int,
     batch_size: int = 64,
@@ -109,7 +112,7 @@ def calculate_hyperpixel_deltas(
         predictor: ModelPredictor instance
         input_batch: Input tensor batch [1, C, H, W]
         segments: Pixel-to-segment mapping array [H, W]
-        hyperpixel_segment_ids_list: List of segment ID lists, e.g. [[1,2,3], [4,5,6]]
+        segment_sets: List of segment ID sets, e.g. [{1,2,3}, {4,5,6}]
         replacement_image: Replacement tensor [C, H, W]
         target_class_idx: Target class index
         batch_size: Batch size for internal batching
@@ -117,11 +120,11 @@ def calculate_hyperpixel_deltas(
     Returns:
         Delta scores for each candidate
     """
-    if not hyperpixel_segment_ids_list:
+    if not segment_sets:
         return []
 
     _validate_hyperpixel_inputs(
-        input_batch, replacement_image, hyperpixel_segment_ids_list, batch_size
+        input_batch, replacement_image, segment_sets, batch_size
     )
     input_batch, replacement_image, gpu_segments = _prepare_tensors_for_model(
         predictor, input_batch, replacement_image, segments
@@ -134,11 +137,11 @@ def calculate_hyperpixel_deltas(
         ]
 
         all_deltas: list[float] = []
-        num_masks = len(hyperpixel_segment_ids_list)
+        num_masks = len(segment_sets)
 
         for batch_start in range(0, num_masks, batch_size):
             batch_end = min(batch_start + batch_size, num_masks)
-            segment_slice = hyperpixel_segment_ids_list[batch_start:batch_end]
+            segment_slice = segment_sets[batch_start:batch_end]
 
             mask_tensor = _build_mask_tensor(
                 gpu_segments, segment_slice, predictor.device
