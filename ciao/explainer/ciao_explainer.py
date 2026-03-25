@@ -4,7 +4,6 @@ import logging
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
-import numpy as np
 import torch
 
 from ciao.algorithm.builder import build_all_hyperpixels
@@ -28,11 +27,10 @@ class ExplanationResult(TypedDict):
 
     input_batch: torch.Tensor
     target_class_idx: int
-    segments: np.ndarray
-    scores: dict[int, float]
-    hyperpixels: list[HyperpixelResult]
     class_name: str
-    performance_mode: str
+    segments: torch.Tensor
+    segment_scores: dict[int, float]  # Segment ID -> score
+    hyperpixels: list[HyperpixelResult]
 
 
 class CIAOExplainer:
@@ -117,13 +115,13 @@ class CIAOExplainer:
             logger.info(f"Auto-selected target class: {target_class_idx}")
 
         # 3. Create segmentation
-        segments, adj_masks = create_segmentation(
+        image_graph = create_segmentation(
             input_tensor,
             segmentation_type=segmentation_type,
             segment_size=segment_size,
             neighborhood=neighborhood,
         )
-        num_segments = len(adj_masks)
+        num_segments = image_graph.num_segments
 
         # Fail if segmentation is empty
         if num_segments == 0:
@@ -138,15 +136,14 @@ class CIAOExplainer:
 
         # 4. Calculate base scores from surrogate dataset
         X, y = create_surrogate_dataset(
-            predictor,
-            input_batch,
-            replacement_image,
-            segments,
-            adj_masks,
-            target_class_idx,
+            predictor=predictor,
+            input_batch=input_batch,
+            replacement_image=replacement_image,
+            image_graph=image_graph,
+            target_class_idx=target_class_idx,
             batch_size=batch_size,
         )
-        scores = calculate_segment_scores(X, y)
+        segment_scores = calculate_segment_scores(X, y)
 
         # 5. Set up algorithm-specific builder and parameters
         algo_kwargs = {"desired_length": desired_length, "batch_size": batch_size}
@@ -162,11 +159,11 @@ class CIAOExplainer:
             builder_func=builder_func,
             predictor=predictor,
             input_batch=input_batch,
-            segments=segments,
+            segments=image_graph.segments,
             replacement_image=replacement_image,
-            adj_masks=adj_masks,
+            image_graph=image_graph,
             target_class_idx=target_class_idx,
-            scores=scores,
+            scores=segment_scores,
             max_hyperpixels=max_hyperpixels,
             **algo_kwargs,
         )
@@ -182,11 +179,10 @@ class CIAOExplainer:
         result: ExplanationResult = {
             "input_batch": input_batch,
             "target_class_idx": target_class_idx,
-            "segments": segments,
-            "scores": scores,
+            "segments": image_graph.segments,
+            "segment_scores": segment_scores,
             "hyperpixels": hyperpixels,
             "class_name": class_name,
-            "performance_mode": method,
         }
         return result
 
@@ -200,7 +196,7 @@ class CIAOExplainer:
         """Visualize the generated explanation.
 
         Raises:
-            NotImplementedError: Will be implemented in an upcoming PR.
+            NotImplementedError: Will be implemented soon.
         """
         raise NotImplementedError(
             "Visualization functionality will be (hopefully) added in a future update."

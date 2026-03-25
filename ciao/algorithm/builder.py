@@ -4,9 +4,9 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-import numpy as np
 import torch
 
+from ciao.algorithm.graph import ImageGraph
 from ciao.model.predictor import ModelPredictor
 from ciao.scoring.hyperpixel import HyperpixelResult
 
@@ -18,9 +18,9 @@ def build_all_hyperpixels(
     builder_func: Callable[..., HyperpixelResult],
     predictor: ModelPredictor,
     input_batch: torch.Tensor,
-    segments: np.ndarray,
+    segments: torch.Tensor,
     replacement_image: torch.Tensor,
-    adj_masks: tuple[int, ...],
+    image_graph: ImageGraph,
     target_class_idx: int,
     scores: dict[int, float],
     max_hyperpixels: int,
@@ -38,7 +38,7 @@ def build_all_hyperpixels(
         input_batch: Preprocessed image batch
         segments: Segmentation map
         replacement_image: Replacement tensor
-        adj_masks: Adjacency bitmasks
+        image_graph: Graph representation of image segments
         target_class_idx: Target class index
         scores: Base segment scores
         max_hyperpixels: Maximum number of hyperpixels to construct
@@ -48,8 +48,8 @@ def build_all_hyperpixels(
         List of hyperpixel dicts sorted by absolute score
     """
     hyperpixels = []
-    processed_segments = set()
-    used_mask = 0
+    processed_segments: set[int] = set()
+    used_segments: frozenset[int] = frozenset()
 
     for i in range(max_hyperpixels):
         # Find best unprocessed seed
@@ -75,26 +75,25 @@ def build_all_hyperpixels(
             input_batch=input_batch,
             segments=segments,
             replacement_image=replacement_image,
-            adj_masks=adj_masks,
+            image_graph=image_graph,
             target_class_idx=target_class_idx,
             seed_idx=seed_idx,
             optimization_sign=optimization_sign,
-            used_mask=used_mask,
+            used_segments=used_segments,
             **algo_kwargs,
         )
 
         # Extract and update state
-        hyperpixel_mask = result["mask"]
-        used_mask |= hyperpixel_mask
-        hyperpixel_segments = result["segments"]
+        hyperpixel_region = result["region"]
+        used_segments = frozenset(used_segments | hyperpixel_region)
 
-        if not hyperpixel_segments:
+        if not hyperpixel_region:
             raise RuntimeError(
                 f"Builder failed to generate any segments for seed {seed_idx}."
             )
 
         hyperpixels.append(result)
-        processed_segments.update(hyperpixel_segments)
+        processed_segments.update(hyperpixel_region)
 
     # Sort by absolute score
     hyperpixels.sort(key=lambda x: abs(float(x["score"])), reverse=True)
