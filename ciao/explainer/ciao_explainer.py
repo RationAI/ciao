@@ -159,7 +159,6 @@ class CIAOExplainer:
             builder_func=builder_func,
             predictor=predictor,
             input_batch=input_batch,
-            segments=image_graph.segments,
             replacement_image=replacement_image,
             image_graph=image_graph,
             target_class_idx=target_class_idx,

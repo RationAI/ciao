@@ -18,7 +18,6 @@ def build_all_hyperpixels(
     builder_func: Callable[..., HyperpixelResult],
     predictor: ModelPredictor,
     input_batch: torch.Tensor,
-    segments: torch.Tensor,
     replacement_image: torch.Tensor,
     image_graph: ImageGraph,
     target_class_idx: int,
@@ -36,7 +35,6 @@ def build_all_hyperpixels(
         builder_func: Callable that builds a single hyperpixel (e.g., MCTS, Greedy).
         predictor: Model predictor
         input_batch: Preprocessed image batch
-        segments: Segmentation map
         replacement_image: Replacement tensor
         image_graph: Graph representation of image segments
         target_class_idx: Target class index
@@ -73,7 +71,6 @@ def build_all_hyperpixels(
         result = builder_func(
             predictor=predictor,
             input_batch=input_batch,
-            segments=segments,
             replacement_image=replacement_image,
             image_graph=image_graph,
             target_class_idx=target_class_idx,
