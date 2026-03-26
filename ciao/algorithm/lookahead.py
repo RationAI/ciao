@@ -67,6 +67,9 @@ def build_hyperpixel_greedy_lookahead(
             desired_length=desired_length,
         )
 
+        if not candidates:
+            break
+
         # Batch evaluate all candidates
         candidate_regions = list(candidates.keys())
 
