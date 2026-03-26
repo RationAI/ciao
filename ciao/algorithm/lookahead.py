@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 def build_hyperpixel_greedy_lookahead(
     predictor: ModelPredictor,
     input_batch: torch.Tensor,
-    segments: torch.Tensor,
     replacement_image: torch.Tensor,
     image_graph: ImageGraph,
     target_class_idx: int,
@@ -39,7 +38,6 @@ def build_hyperpixel_greedy_lookahead(
     Args:
         predictor: Model predictor
         input_batch: Preprocessed image
-        segments: Segmentation map tensor
         replacement_image: Replacement tensor [C, H, W]
         image_graph: Graph representation of image segments and their adjacencies
         target_class_idx: Target class
@@ -76,7 +74,7 @@ def build_hyperpixel_greedy_lookahead(
         scores_list = calculate_hyperpixel_deltas(
             predictor=predictor,
             input_batch=input_batch,
-            segments=segments,
+            segments=image_graph.segments,
             segment_sets=candidate_regions,
             replacement_image=replacement_image,
             target_class_idx=target_class_idx,
@@ -108,7 +106,7 @@ def build_hyperpixel_greedy_lookahead(
         final_score = calculate_hyperpixel_deltas(
             predictor=predictor,
             input_batch=input_batch,
-            segments=segments,
+            segments=image_graph.segments,
             segment_sets=[current_region],
             replacement_image=replacement_image,
             target_class_idx=target_class_idx,
