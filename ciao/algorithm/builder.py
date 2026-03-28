@@ -1,6 +1,5 @@
 """Unified hyperpixel builder orchestrating different search algorithms."""
 
-import logging
 from collections.abc import Callable
 from dataclasses import asdict
 
@@ -12,8 +11,6 @@ from ciao.explainer.strategies import ExplanationMethod, LookaheadMethod
 from ciao.model.predictor import ModelPredictor
 from ciao.scoring.hyperpixel import HyperpixelResult
 
-
-logger = logging.getLogger(__name__)
 
 BUILDER_REGISTRY: dict[type[ExplanationMethod], Callable[..., HyperpixelResult]] = {
     LookaheadMethod: build_hyperpixel_greedy_lookahead,
@@ -56,11 +53,11 @@ def build_all_hyperpixels(
     if method is None:
         method = LookaheadMethod()
 
-    hyperpixels = []
+    hyperpixels: list[HyperpixelResult] = []
     processed_segments: set[int] = set()
     used_segments: frozenset[int] = frozenset()
 
-    for i in range(max_hyperpixels):
+    for _ in range(max_hyperpixels):
         # Find best unprocessed seed
         available_segments = [
             seg_id for seg_id in scores if seg_id not in processed_segments
@@ -72,11 +69,6 @@ def build_all_hyperpixels(
         seed_idx = max(available_segments, key=lambda x: abs(scores[x]))
         seed_score = scores[seed_idx]
         optimization_sign = 1 if seed_score >= 0 else -1
-
-        logger.info(f"\n--- Hyperpixel {i + 1}/{max_hyperpixels} ---")
-        logger.info(
-            f"Seed: {seed_idx}, score: {seed_score:.4f}, sign: {optimization_sign}"
-        )
 
         # Retrieve proper builder from registry
         builder_func = BUILDER_REGISTRY.get(type(method))

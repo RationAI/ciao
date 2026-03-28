@@ -59,7 +59,7 @@ class CIAOExplainer:
         """Generate CIAO explanation for an image.
 
         Args:
-            image_path: Path to image or PIL Image object
+            image_path: Path to image file (string or pathlib.Path)
             predictor: ModelPredictor instance
             target_class_idx: Target class to explain (None = auto-select)
             max_hyperpixels: Maximum number of hyperpixels to build
@@ -86,9 +86,7 @@ class CIAOExplainer:
         input_tensor = load_and_preprocess_image(image_path, device=predictor.device)
         input_batch = input_tensor.unsqueeze(0)  # Add batch dimension
 
-        replacement_image = get_replacement_image(input_tensor, replacement).to(
-            predictor.device
-        )
+        replacement_image = get_replacement_image(input_tensor, replacement)
 
         # 2. Get target class
         if target_class_idx is None:

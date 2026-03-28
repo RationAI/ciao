@@ -33,8 +33,10 @@ class ModelPredictor:
                 f"get_predicted_class expects a single input (batch size 1), but got shape {input_batch.shape}"
             )
 
-        probs = self.get_predictions(input_batch)
-        return int(torch.argmax(probs[0]).item())
+        input_batch = input_batch.to(self.device)
+        with torch.no_grad():
+            outputs = self.model(input_batch)
+            return int(outputs.argmax(dim=1)[0].item())
 
     def get_class_logit_batch(
         self, input_batch: torch.Tensor, target_class_idx: int

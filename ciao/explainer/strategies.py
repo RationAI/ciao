@@ -1,4 +1,4 @@
-"""Dataclasses for explanation methods and replacement strategies."""
+"""Dataclasses for explanation methods, replacement strategies, and segmentation strategies."""
 
 from dataclasses import dataclass
 
