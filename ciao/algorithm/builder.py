@@ -1,6 +1,8 @@
 """Unified hyperpixel builder orchestrating different search algorithms."""
 
 import logging
+from collections.abc import Callable
+from dataclasses import asdict
 
 import torch
 
@@ -12,6 +14,10 @@ from ciao.scoring.hyperpixel import HyperpixelResult
 
 
 logger = logging.getLogger(__name__)
+
+BUILDER_REGISTRY: dict[type[ExplanationMethod], Callable[..., HyperpixelResult]] = {
+    LookaheadMethod: build_hyperpixel_greedy_lookahead,
+}
 
 
 def build_all_hyperpixels(
@@ -72,23 +78,25 @@ def build_all_hyperpixels(
             f"Seed: {seed_idx}, score: {seed_score:.4f}, sign: {optimization_sign}"
         )
 
-        # Call the dynamically provided algorithm for a single hyperpixel
-        if isinstance(method, LookaheadMethod):
-            result = build_hyperpixel_greedy_lookahead(
-                predictor=predictor,
-                input_batch=input_batch,
-                replacement_image=replacement_image,
-                image_graph=image_graph,
-                target_class_idx=target_class_idx,
-                seed_idx=seed_idx,
-                optimization_sign=optimization_sign,
-                used_segments=used_segments,
-                desired_length=desired_length,
-                batch_size=batch_size,
-                lookahead_distance=method.lookahead_distance,
-            )
-        else:
+        # Retrieve proper builder from registry
+        builder_func = BUILDER_REGISTRY.get(type(method))
+        if builder_func is None:
             raise TypeError(f"Unsupported explanation method type: {type(method)}")
+
+        # Call the dynamically provided algorithm for a single hyperpixel
+        result = builder_func(
+            predictor=predictor,
+            input_batch=input_batch,
+            replacement_image=replacement_image,
+            image_graph=image_graph,
+            target_class_idx=target_class_idx,
+            seed_idx=seed_idx,
+            optimization_sign=optimization_sign,
+            used_segments=used_segments,
+            desired_length=desired_length,
+            batch_size=batch_size,
+            **asdict(method),
+        )
 
         # Extract and update state
         hyperpixel_region = result["region"]
