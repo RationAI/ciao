@@ -70,7 +70,7 @@ class CIAOExplainer:
             replacement: Masking strategy object (default: MeanColorReplacement)
 
         Returns:
-            Dictionary containing explanation artifacts and stats.
+            ExplanationResult object containing explanation artifacts and stats.
         """
         if segmentation is None:
             segmentation = HexagonalSegmentation()

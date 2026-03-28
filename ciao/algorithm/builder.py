@@ -51,7 +51,7 @@ def build_all_hyperpixels(
         batch_size: Batch size for model evaluation
 
     Returns:
-        List of hyperpixel dicts sorted by absolute score
+        List of HyperpixelResult objects sorted by absolute score
     """
     if method is None:
         method = LookaheadMethod()
@@ -111,6 +111,6 @@ def build_all_hyperpixels(
         processed_segments.update(hyperpixel_region)
 
     # Sort by absolute score
-    hyperpixels.sort(key=lambda x: abs(float(x.score)), reverse=True)
+    hyperpixels.sort(key=lambda x: abs(x.score), reverse=True)
 
     return hyperpixels
