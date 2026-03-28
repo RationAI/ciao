@@ -54,13 +54,12 @@ def build_all_hyperpixels(
         method = LookaheadMethod()
 
     hyperpixels: list[HyperpixelResult] = []
-    processed_segments: set[int] = set()
     used_segments: frozenset[int] = frozenset()
 
     for _ in range(max_hyperpixels):
         # Find best unprocessed seed
         available_segments = [
-            seg_id for seg_id in scores if seg_id not in processed_segments
+            seg_id for seg_id in scores if seg_id not in used_segments
         ]
 
         if not available_segments:
@@ -100,7 +99,6 @@ def build_all_hyperpixels(
         # Extract and update state
         used_segments = frozenset(used_segments | hyperpixel_region)
         hyperpixels.append(result)
-        processed_segments.update(hyperpixel_region)
 
     # Sort by absolute score
     hyperpixels.sort(key=lambda x: abs(x.score), reverse=True)
