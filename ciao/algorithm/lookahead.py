@@ -122,11 +122,10 @@ def build_hyperpixel_greedy_lookahead(
             batch_size=1,
         )[0]
 
-    result: HyperpixelResult = {
-        "region": current_region,
-        "score": final_score,
-    }
-    return result
+    return HyperpixelResult(
+        region=current_region,
+        score=final_score,
+    )
 
 
 def _generate_lookahead_candidates(

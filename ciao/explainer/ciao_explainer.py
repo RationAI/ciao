@@ -1,7 +1,7 @@
 """CIAO explainer implementation."""
 
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TypedDict
 
 import torch
 
@@ -25,7 +25,8 @@ from ciao.scoring.segments import (
 )
 
 
-class ExplanationResult(TypedDict):
+@dataclass
+class ExplanationResult:
     """Artifacts, hyperpixels and metadata required to produce visualizations."""
 
     input_batch: torch.Tensor
@@ -136,12 +137,11 @@ class CIAOExplainer:
         )
 
         # Return results
-        result: ExplanationResult = {
-            "input_batch": input_batch,
-            "target_class_idx": target_class_idx,
-            "segments": image_graph.segments,
-            "segment_scores": segment_scores,
-            "hyperpixels": hyperpixels,
-            "class_name": class_name,
-        }
-        return result
+        return ExplanationResult(
+            input_batch=input_batch,
+            target_class_idx=target_class_idx,
+            segments=image_graph.segments,
+            segment_scores=segment_scores,
+            hyperpixels=hyperpixels,
+            class_name=class_name,
+        )

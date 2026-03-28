@@ -99,7 +99,7 @@ def build_all_hyperpixels(
         )
 
         # Extract and update state
-        hyperpixel_region = result["region"]
+        hyperpixel_region = result.region
         used_segments = frozenset(used_segments | hyperpixel_region)
 
         if not hyperpixel_region:
@@ -111,6 +111,6 @@ def build_all_hyperpixels(
         processed_segments.update(hyperpixel_region)
 
     # Sort by absolute score
-    hyperpixels.sort(key=lambda x: abs(float(x["score"])), reverse=True)
+    hyperpixels.sort(key=lambda x: abs(float(x.score)), reverse=True)
 
     return hyperpixels

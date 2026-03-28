@@ -15,6 +15,7 @@ class LookaheadMethod(ExplanationMethod):
     lookahead_distance: int = 2
 
 
+@dataclass
 class Replacement:
     """Base class for image masking strategies."""
 
@@ -44,6 +45,7 @@ class SolidColorReplacement(Replacement):
     color: tuple[int, int, int] = (0, 0, 0)
 
 
+@dataclass
 class SegmentationMethod:
     """Base class for image segmentation strategies."""
 

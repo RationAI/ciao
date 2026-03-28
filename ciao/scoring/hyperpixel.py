@@ -1,12 +1,13 @@
 from collections.abc import Sequence, Set
-from typing import TypedDict
+from dataclasses import dataclass
 
 import torch
 
 from ciao.model.predictor import ModelPredictor
 
 
-class HyperpixelResult(TypedDict):
+@dataclass
+class HyperpixelResult:
     """Type definition for the output of hyperpixel building algorithms."""
 
     region: frozenset[int]
@@ -164,6 +165,6 @@ def select_top_hyperpixels(
 
     return sorted(
         hyperpixels,
-        key=lambda hp: abs(hp["score"]),
+        key=lambda hp: abs(hp.score),
         reverse=True,
     )[:max_hyperpixels]
