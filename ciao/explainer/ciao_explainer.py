@@ -1,7 +1,7 @@
 """CIAO explainer implementation."""
 
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import TypedDict
 
 import torch
 
@@ -42,9 +42,6 @@ class CIAOExplainer:
     Generates explanations for image classification models by identifying
     influential image regions using mutual information and search algorithms.
     """
-
-    def __init__(self) -> None:
-        """Initialize the CIAO explainer."""
 
     def explain(
         self,
@@ -148,19 +145,3 @@ class CIAOExplainer:
             "class_name": class_name,
         }
         return result
-
-    def visualize(
-        self,
-        image: torch.Tensor,
-        explanation: ExplanationResult,
-        save_path: str | Path | None = None,
-        interactive: bool = True,
-    ) -> Any:
-        """Visualize the generated explanation.
-
-        Raises:
-            NotImplementedError: Will be implemented soon.
-        """
-        raise NotImplementedError(
-            "Visualization functionality will be (hopefully) added in a future update."
-        )

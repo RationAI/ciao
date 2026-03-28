@@ -106,7 +106,8 @@ ciao/
 │   │   ├── segments.py             # Surrogate dataset creation and segment scoring
 │   │   └── hyperpixel.py           # Hyperpixel evaluation and selection
 │   ├── explainer/                  # Core explainer implementation
-│   │   └── ciao_explainer.py       # Main CIAO explainer class
+│   │   ├── ciao_explainer.py       # Main CIAO explainer class
+│   │   └── strategies.py           # Configuration dataclasses (methods, segmentation, replacement)
 │   ├── model/                      # Model inference and predictions
 │   │   └── predictor.py            # ModelPredictor class for inference
 │   ├── visualization/              # Visualization tools
