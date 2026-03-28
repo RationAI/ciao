@@ -28,9 +28,9 @@ class ModelPredictor:
 
     def get_predicted_class(self, input_batch: torch.Tensor) -> int:
         """Get the most likely class index for a single input."""
-        if input_batch.shape[0] != 1:
+        if input_batch.dim() == 0 or input_batch.shape[0] != 1:
             raise ValueError(
-                f"get_predicted_class expects a single input (batch size 1), but got batch size {input_batch.shape[0]}"
+                f"get_predicted_class expects a single input (batch size 1), but got shape {input_batch.shape}"
             )
 
         probs = self.get_predictions(input_batch)

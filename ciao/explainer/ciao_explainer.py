@@ -66,11 +66,11 @@ class CIAOExplainer:
             desired_length: Target number of segments per hyperpixel (default=30)
             batch_size: Batch size for model evaluation
             segmentation: Image segmentation strategy object (default: HexagonalSegmentation)
-            method: Hyperpixel construction method object (default: LookaheadMethod)
+            method: Hyperpixel construction method object. Callers can rely on upstream default (LookaheadMethod) or pass explicitly.
             replacement: Masking strategy object (default: MeanColorReplacement)
 
         Returns:
-            ExplanationResult object containing explanation artifacts and stats.
+            ExplanationResult: ExplanationResult dataclass containing explanation artifacts and stats.
         """
         if segmentation is None:
             segmentation = HexagonalSegmentation()

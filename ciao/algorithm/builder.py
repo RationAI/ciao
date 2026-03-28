@@ -51,7 +51,7 @@ def build_all_hyperpixels(
         batch_size: Batch size for model evaluation
 
     Returns:
-        List of HyperpixelResult objects sorted by absolute score
+        List[HyperpixelResult]: list of HyperpixelResult objects sorted by absolute score
     """
     if method is None:
         method = LookaheadMethod()
@@ -98,15 +98,15 @@ def build_all_hyperpixels(
             **asdict(method),
         )
 
-        # Extract and update state
         hyperpixel_region = result.region
-        used_segments = frozenset(used_segments | hyperpixel_region)
 
         if not hyperpixel_region:
             raise RuntimeError(
                 f"Builder failed to generate any segments for seed {seed_idx}."
             )
 
+        # Extract and update state
+        used_segments = frozenset(used_segments | hyperpixel_region)
         hyperpixels.append(result)
         processed_segments.update(hyperpixel_region)
 
