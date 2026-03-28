@@ -1,10 +1,14 @@
 import math
-from typing import Literal
 
 import numpy as np
 import torch
 
 from ciao.algorithm.graph import ImageGraph
+from ciao.explainer.strategies import (
+    HexagonalSegmentation,
+    SegmentationMethod,
+    SquareSegmentation,
+)
 
 
 def _hex_round_vectorized(
@@ -192,39 +196,41 @@ def _create_hexagonal_grid(
 
 def create_segmentation(
     input_tensor: torch.Tensor,
-    segmentation_type: Literal["square", "hexagonal"] = "hexagonal",
-    segment_size: int = 14,
-    neighborhood: int = 8,
+    strategy: SegmentationMethod | None = None,
 ) -> ImageGraph:
     """Create image segmentation with specified type.
 
     Args:
         input_tensor: Input image tensor [C, H, W]
-        segmentation_type: "square" or "hexagonal"
-        segment_size: Size parameter (square_size or hex_radius)
-        neighborhood: Neighborhood connectivity for squares (4, or 8)
+        strategy: Configuration object for segmentation strategy (defaults to HexagonalSegmentation)
 
     Returns:
         ImageGraph containing segments and adjacency list
     """
-    if segment_size <= 0:
-        raise ValueError(
-            f"segment_size must be positive, got {segment_size}. "
-            "Non-positive values cause division by zero or invalid range operations."
-        )
+    if strategy is None:
+        strategy = HexagonalSegmentation()
 
-    if segmentation_type not in ("square", "hexagonal"):
-        raise ValueError(
-            f"Unknown segmentation_type: {segmentation_type}. Use 'square' or 'hexagonal'."
-        )
-
-    if segmentation_type == "square" and neighborhood not in (4, 8):
-        raise ValueError(
-            f"For square segmentation, neighborhood must be 4 or 8, got {neighborhood}."
-        )
-    if segmentation_type == "square":
+    if isinstance(strategy, SquareSegmentation):
+        if strategy.square_size <= 0:
+            raise ValueError(
+                f"square_size must be positive, got {strategy.square_size}. "
+                "Non-positive values cause division by zero or invalid range operations."
+            )
+        if strategy.neighborhood not in (4, 8):
+            raise ValueError(
+                f"For square segmentation, neighborhood must be 4 or 8, got {strategy.neighborhood}."
+            )
         return _create_square_grid(
-            input_tensor, square_size=segment_size, neighborhood=neighborhood
+            input_tensor,
+            square_size=strategy.square_size,
+            neighborhood=strategy.neighborhood,
         )
+    elif isinstance(strategy, HexagonalSegmentation):
+        if strategy.hex_radius <= 0:
+            raise ValueError(
+                f"hex_radius must be positive, got {strategy.hex_radius}. "
+                "Non-positive values cause division by zero or invalid range operations."
+            )
+        return _create_hexagonal_grid(input_tensor, hex_radius=strategy.hex_radius)
     else:
-        return _create_hexagonal_grid(input_tensor, hex_radius=segment_size)
+        raise TypeError(f"Unknown segmentation strategy: {type(strategy)}")

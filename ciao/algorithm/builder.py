@@ -1,12 +1,12 @@
 """Unified hyperpixel builder orchestrating different search algorithms."""
 
 import logging
-from collections.abc import Callable
-from typing import Any
 
 import torch
 
 from ciao.algorithm.graph import ImageGraph
+from ciao.algorithm.lookahead import build_hyperpixel_greedy_lookahead
+from ciao.explainer.strategies import ExplanationMethod, LookaheadMethod
 from ciao.model.predictor import ModelPredictor
 from ciao.scoring.hyperpixel import HyperpixelResult
 
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 def build_all_hyperpixels(
-    builder_func: Callable[..., HyperpixelResult],
+    method: ExplanationMethod | None,
     predictor: ModelPredictor,
     input_batch: torch.Tensor,
     replacement_image: torch.Tensor,
@@ -23,7 +23,8 @@ def build_all_hyperpixels(
     target_class_idx: int,
     scores: dict[int, float],
     max_hyperpixels: int,
-    **algo_kwargs: Any,
+    desired_length: int = 30,
+    batch_size: int = 64,
 ) -> list[HyperpixelResult]:
     """Build multiple hyperpixels using the provided single-hyperpixel algorithm.
 
@@ -32,7 +33,7 @@ def build_all_hyperpixels(
     and sorting the final results.
 
     Args:
-        builder_func: Callable that builds a single hyperpixel (e.g., MCTS, Greedy).
+        method: Configuration object for the explanation method. Default is LookaheadMethod.
         predictor: Model predictor
         input_batch: Preprocessed image batch
         replacement_image: Replacement tensor
@@ -40,11 +41,15 @@ def build_all_hyperpixels(
         target_class_idx: Target class index
         scores: Base segment scores
         max_hyperpixels: Maximum number of hyperpixels to construct
-        **algo_kwargs: Algorithm-specific parameters passed to builder_func
+        desired_length: Target number of segments per hyperpixel
+        batch_size: Batch size for model evaluation
 
     Returns:
         List of hyperpixel dicts sorted by absolute score
     """
+    if method is None:
+        method = LookaheadMethod()
+
     hyperpixels = []
     processed_segments: set[int] = set()
     used_segments: frozenset[int] = frozenset()
@@ -68,17 +73,22 @@ def build_all_hyperpixels(
         )
 
         # Call the dynamically provided algorithm for a single hyperpixel
-        result = builder_func(
-            predictor=predictor,
-            input_batch=input_batch,
-            replacement_image=replacement_image,
-            image_graph=image_graph,
-            target_class_idx=target_class_idx,
-            seed_idx=seed_idx,
-            optimization_sign=optimization_sign,
-            used_segments=used_segments,
-            **algo_kwargs,
-        )
+        if isinstance(method, LookaheadMethod):
+            result = build_hyperpixel_greedy_lookahead(
+                predictor=predictor,
+                input_batch=input_batch,
+                replacement_image=replacement_image,
+                image_graph=image_graph,
+                target_class_idx=target_class_idx,
+                seed_idx=seed_idx,
+                optimization_sign=optimization_sign,
+                used_segments=used_segments,
+                desired_length=desired_length,
+                batch_size=batch_size,
+                lookahead_distance=method.lookahead_distance,
+            )
+        else:
+            raise TypeError(f"Unsupported explanation method type: {type(method)}")
 
         # Extract and update state
         hyperpixel_region = result["region"]
