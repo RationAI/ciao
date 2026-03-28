@@ -3,7 +3,6 @@
 Rolling horizon strategy: Look ahead multiple steps but only commit one step at a time.
 """
 
-import logging
 from collections import deque
 from collections.abc import Set
 
@@ -12,9 +11,6 @@ import torch
 from ciao.algorithm.graph import ImageGraph
 from ciao.model.predictor import ModelPredictor
 from ciao.scoring.hyperpixel import HyperpixelResult, calculate_hyperpixel_deltas
-
-
-logger = logging.getLogger(__name__)
 
 
 def build_hyperpixel_greedy_lookahead(
