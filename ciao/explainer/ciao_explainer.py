@@ -65,8 +65,8 @@ class CIAOExplainer:
             max_hyperpixels: Maximum number of hyperpixels to build
             desired_length: Target number of segments per hyperpixel (default=30)
             batch_size: Batch size for model evaluation
-            segmentation: Image segmentation strategy object (default: HexagonalSegmentation)
-            method: Hyperpixel construction method object. Callers can rely on upstream default (LookaheadMethod) or pass explicitly.
+            segmentation: Image segmentation strategy object (default: HexagonalSegmentation). Possible methods include: HexagonalSegmentation and SquareSegmentation.
+            method: Hyperpixel construction method object. Callers can rely on upstream default (LookaheadMethod) or pass explicitly. Possible methods include: LookaheadMethod.
             replacement: Masking strategy object (default: MeanColorReplacement). Possible methods include: MeanColorReplacement, InterlacingReplacement, BlurReplacement, and SolidColorReplacement.
 
         Returns:
