@@ -1,14 +1,11 @@
 import math
+from dataclasses import dataclass
 
 import numpy as np
 import torch
 
 from ciao.algorithm.graph import ImageGraph
-from ciao.explainer.strategies import (
-    HexagonalSegmentation,
-    SegmentationMethod,
-    SquareSegmentation,
-)
+from ciao.explainer.strategies import SegmentationMethod
 
 
 def _hex_round_vectorized(
@@ -194,43 +191,36 @@ def _create_hexagonal_grid(
     return ImageGraph(segments=segments, adj_list=adj_list)
 
 
-def create_segmentation(
-    input_tensor: torch.Tensor,
-    strategy: SegmentationMethod | None = None,
-) -> ImageGraph:
-    """Create image segmentation with specified type.
+@dataclass
+class HexagonalSegmentation(SegmentationMethod):
+    """Configuration for hexagonal grid segmentation."""
 
-    Args:
-        input_tensor: Input image tensor [C, H, W]
-        strategy: Configuration object for segmentation strategy (defaults to HexagonalSegmentation)
+    hex_radius: int = 4
 
-    Returns:
-        ImageGraph containing segments and adjacency list
-    """
-    if strategy is None:
-        strategy = HexagonalSegmentation()
+    def __post_init__(self) -> None:
+        if self.hex_radius <= 0:
+            raise ValueError(f"hex_radius must be > 0, got {self.hex_radius}")
 
-    if isinstance(strategy, SquareSegmentation):
-        if strategy.square_size <= 0:
-            raise ValueError(
-                f"square_size must be positive, got {strategy.square_size}. "
-                "Non-positive values cause division by zero or invalid range operations."
-            )
-        if strategy.neighborhood not in (4, 8):
-            raise ValueError(
-                f"For square segmentation, neighborhood must be 4 or 8, got {strategy.neighborhood}."
-            )
+    def __call__(self, image: torch.Tensor) -> ImageGraph:
+        return _create_hexagonal_grid(image, hex_radius=self.hex_radius)
+
+
+@dataclass
+class SquareSegmentation(SegmentationMethod):
+    """Configuration for square grid segmentation."""
+
+    square_size: int = 4
+    neighborhood: int = 8
+
+    def __post_init__(self) -> None:
+        if self.square_size <= 0:
+            raise ValueError(f"square_size must be > 0, got {self.square_size}")
+        if self.neighborhood <= 0:
+            raise ValueError(f"neighborhood must be > 0, got {self.neighborhood}")
+
+    def __call__(self, image: torch.Tensor) -> ImageGraph:
         return _create_square_grid(
-            input_tensor,
-            square_size=strategy.square_size,
-            neighborhood=strategy.neighborhood,
+            image,
+            square_size=self.square_size,
+            neighborhood=self.neighborhood,
         )
-    elif isinstance(strategy, HexagonalSegmentation):
-        if strategy.hex_radius <= 0:
-            raise ValueError(
-                f"hex_radius must be positive, got {strategy.hex_radius}. "
-                "Non-positive values cause division by zero or invalid range operations."
-            )
-        return _create_hexagonal_grid(input_tensor, hex_radius=strategy.hex_radius)
-    else:
-        raise TypeError(f"Unknown segmentation strategy: {type(strategy)}")

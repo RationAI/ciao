@@ -1,20 +1,12 @@
 """Unified hyperpixel builder orchestrating different search algorithms."""
 
-from collections.abc import Callable
-from dataclasses import asdict
-
 import torch
 
+from ciao.algorithm.context import SearchContext
 from ciao.algorithm.graph import ImageGraph
-from ciao.algorithm.lookahead import build_hyperpixel_greedy_lookahead
 from ciao.explainer.strategies import ExplanationMethod, LookaheadMethod
 from ciao.model.predictor import ModelPredictor
 from ciao.scoring.hyperpixel import HyperpixelResult
-
-
-BUILDER_REGISTRY: dict[type[ExplanationMethod], Callable[..., HyperpixelResult]] = {
-    LookaheadMethod: build_hyperpixel_greedy_lookahead,
-}
 
 
 def build_all_hyperpixels(
@@ -69,13 +61,8 @@ def build_all_hyperpixels(
         seed_score = scores[seed_idx]
         optimization_sign = 1 if seed_score >= 0 else -1
 
-        # Retrieve proper builder from registry
-        builder_func = BUILDER_REGISTRY.get(type(method))
-        if builder_func is None:
-            raise TypeError(f"Unsupported explanation method type: {type(method)}")
-
-        # Call the dynamically provided algorithm for a single hyperpixel
-        result = builder_func(
+        # Construct a SearchContext for the current step
+        ctx = SearchContext(
             predictor=predictor,
             input_batch=input_batch,
             replacement_image=replacement_image,
@@ -83,11 +70,13 @@ def build_all_hyperpixels(
             target_class_idx=target_class_idx,
             seed_idx=seed_idx,
             optimization_sign=optimization_sign,
-            used_segments=used_segments,
+            used_segments=frozenset(used_segments),
             desired_length=desired_length,
             batch_size=batch_size,
-            **asdict(method),
         )
+
+        # Call the dynamically provided algorithm for a single hyperpixel
+        result = method(ctx)
 
         hyperpixel_region = result.region
 

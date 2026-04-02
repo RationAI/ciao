@@ -7,13 +7,11 @@ import torch
 
 from ciao.algorithm.builder import build_all_hyperpixels
 from ciao.data.preprocessing import load_and_preprocess_image
-from ciao.data.replacement import get_replacement_image
-from ciao.data.segmentation import create_segmentation
+from ciao.data.replacement import MeanColorReplacement
+from ciao.data.segmentation import HexagonalSegmentation
 from ciao.explainer.strategies import (
     ExplanationMethod,
-    HexagonalSegmentation,
     LookaheadMethod,
-    MeanColorReplacement,
     Replacement,
     SegmentationMethod,
 )
@@ -86,14 +84,14 @@ class CIAOExplainer:
         input_tensor = load_and_preprocess_image(image_path, device=predictor.device)
         input_batch = input_tensor.unsqueeze(0)  # Add batch dimension
 
-        replacement_image = get_replacement_image(input_tensor, replacement)
+        replacement_image = replacement(input_tensor)
 
         # 2. Get target class
         if target_class_idx is None:
             target_class_idx = predictor.get_predicted_class(input_batch)
 
         # 3. Create segmentation
-        image_graph = create_segmentation(input_tensor, segmentation)
+        image_graph = segmentation(input_tensor)
         num_segments = image_graph.num_segments
 
         # Fail if segmentation is empty

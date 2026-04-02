@@ -1,16 +1,25 @@
 """Dataclasses for explanation methods, replacement strategies, and segmentation strategies."""
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+import torch
 
-@dataclass
-class ExplanationMethod:
+from ciao.algorithm.context import SearchContext
+from ciao.algorithm.graph import ImageGraph
+from ciao.scoring.hyperpixel import HyperpixelResult
+
+
+class ExplanationMethod(ABC):
     """Base class for all hyperpixel building methods."""
+
+    @abstractmethod
+    def __call__(self, ctx: SearchContext) -> HyperpixelResult: ...
 
 
 @dataclass
 class LookaheadMethod(ExplanationMethod):
-    """Configuration for the lookahead hyperpixel building method."""
+    """Lookahead hyperpixel building strategy."""
 
     lookahead_distance: int = 2
 
@@ -20,78 +29,33 @@ class LookaheadMethod(ExplanationMethod):
                 f"lookahead_distance must be >= 0, got {self.lookahead_distance}"
             )
 
+    def __call__(self, ctx: SearchContext) -> HyperpixelResult:
+        from ciao.algorithm.lookahead import build_hyperpixel_greedy_lookahead
 
-@dataclass
-class Replacement:
+        return build_hyperpixel_greedy_lookahead(
+            predictor=ctx.predictor,
+            input_batch=ctx.input_batch,
+            replacement_image=ctx.replacement_image,
+            image_graph=ctx.image_graph,
+            target_class_idx=ctx.target_class_idx,
+            seed_idx=ctx.seed_idx,
+            optimization_sign=ctx.optimization_sign,
+            used_segments=set(ctx.used_segments),
+            desired_length=ctx.desired_length,
+            batch_size=ctx.batch_size,
+            lookahead_distance=self.lookahead_distance,
+        )
+
+
+class Replacement(ABC):
     """Base class for image masking strategies."""
 
-
-@dataclass
-class MeanColorReplacement(Replacement):
-    """Configuration for mean color replacement strategy."""
+    @abstractmethod
+    def __call__(self, image: torch.Tensor) -> torch.Tensor: ...
 
 
-@dataclass
-class BlurReplacement(Replacement):
-    """Configuration for blur replacement strategy."""
-
-    sigma: tuple[float, float] = (5.0, 5.0)
-    kernel_size: tuple[int, int] = (15, 15)
-
-    def __post_init__(self) -> None:
-        for s in self.sigma:
-            if s <= 0:
-                raise ValueError(f"sigma values must be > 0, got {self.sigma}")
-        for k in self.kernel_size:
-            if k <= 0 or k % 2 == 0:
-                raise ValueError(
-                    f"kernel_size values must be positive odd integers, got {self.kernel_size}"
-                )
-
-
-@dataclass
-class InterlacingReplacement(Replacement):
-    """Configuration for interlacing replacement strategy."""
-
-
-@dataclass
-class SolidColorReplacement(Replacement):
-    """Configuration for solid color replacement strategy."""
-
-    color: tuple[int, int, int] = (0, 0, 0)
-
-    def __post_init__(self) -> None:
-        if not all(0 <= c <= 255 for c in self.color):
-            raise ValueError(
-                f"RGB color values must be between 0 and 255, got {self.color}"
-            )
-
-
-@dataclass
-class SegmentationMethod:
+class SegmentationMethod(ABC):
     """Base class for image segmentation strategies."""
 
-
-@dataclass
-class HexagonalSegmentation(SegmentationMethod):
-    """Configuration for hexagonal grid segmentation."""
-
-    hex_radius: int = 4
-
-    def __post_init__(self) -> None:
-        if self.hex_radius <= 0:
-            raise ValueError(f"hex_radius must be > 0, got {self.hex_radius}")
-
-
-@dataclass
-class SquareSegmentation(SegmentationMethod):
-    """Configuration for square grid segmentation."""
-
-    square_size: int = 4
-    neighborhood: int = 8
-
-    def __post_init__(self) -> None:
-        if self.square_size <= 0:
-            raise ValueError(f"square_size must be > 0, got {self.square_size}")
-        if self.neighborhood <= 0:
-            raise ValueError(f"neighborhood must be > 0, got {self.neighborhood}")
+    @abstractmethod
+    def __call__(self, image: torch.Tensor) -> ImageGraph: ...
