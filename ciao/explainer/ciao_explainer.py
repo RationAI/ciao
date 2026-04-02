@@ -67,7 +67,7 @@ class CIAOExplainer:
             batch_size: Batch size for model evaluation
             segmentation: Image segmentation strategy object (default: HexagonalSegmentation)
             method: Hyperpixel construction method object. Callers can rely on upstream default (LookaheadMethod) or pass explicitly.
-            replacement: Masking strategy object (default: MeanColorReplacement)
+            replacement: Masking strategy object (default: MeanColorReplacement). Possible methods include: MeanColorReplacement, InterlacingReplacement, BlurReplacement, and SolidColorReplacement.
 
         Returns:
             ExplanationResult: ExplanationResult dataclass containing explanation artifacts and stats.
