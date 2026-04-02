@@ -1,4 +1,4 @@
-"""Graph utilities for segment manipulation using frozenset operations."""
+"""Graph utilities for segment manipulation using set operations."""
 
 import random
 from collections.abc import Set
@@ -22,7 +22,7 @@ class ImageGraph:
         self,
         current_region: Set[int],
         used_segments: Set[int],
-    ) -> frozenset[int]:
+    ) -> set[int]:
         """Compute the expansion frontier (valid neighbors) for graph traversal.
 
         The frontier is the set of segments adjacent to the current structure
@@ -38,15 +38,14 @@ class ImageGraph:
             used_segments: Set of globally excluded segments
 
         Returns:
-            Frozenset of valid frontier segments
+            Set of valid frontier segments
         """
         neighbors: set[int] = set()
         for node_id in current_region:
             neighbors |= self.adj_list[node_id]
 
         # Remove segments already in the current region and used segments
-        frontier = frozenset(neighbors - current_region - used_segments)
-        return frontier
+        return neighbors - current_region - used_segments
 
     def sample_connected_superset(
         self,

@@ -23,7 +23,7 @@ def build_hyperpixel_greedy_lookahead(
     desired_length: int,
     lookahead_distance: int,
     optimization_sign: int,
-    used_segments: frozenset[int],
+    used_segments: Set[int],
     batch_size: int = 64,
 ) -> HyperpixelResult:
     """Build a single hyperpixel using greedy lookahead with rolling horizon.

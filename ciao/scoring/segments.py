@@ -58,7 +58,7 @@ def create_surrogate_dataset(
 
     for segment_id in range(num_segments):
         visited: set[int] = {segment_id}
-        current_layer: frozenset[int] = frozenset({segment_id})
+        current_layer: set[int] = {segment_id}
 
         for _ in range(neighborhood_distance):
             next_layer = image_graph.get_frontier(current_layer, visited)
