@@ -91,23 +91,25 @@ ciao/
 ├── ciao/                           # Main package
 │   ├── algorithm/                  # Search algorithms and data structures
 │   │   ├── builder.py              # Unified hyperpixel builder orchestrating searches
-│   │   ├── mcts.py                 # Monte Carlo Tree Search
-│   │   ├── mcgs.py                 # Monte Carlo Graph Search
-│   │   ├── lookahead.py            # Greedy lookahead
-│   │   ├── potential.py            # Potential-based search
+│   │   ├── context.py              # Search context configurations
 │   │   ├── graph.py                # Graph helpers
+│   │   ├── lookahead.py            # Greedy lookahead
+│   │   ├── mcgs.py                 # Monte Carlo Graph Search
+│   │   ├── mcts.py                 # Monte Carlo Tree Search
 │   │   ├── nodes.py                # Node classes for tree/graph search
-│   │   └── search_helpers.py       # Shared MCTS/MCGS helper functions
+│   │   ├── potential.py            # Potential-based search
+│   │   └── search_helpers.py       # Shared search helper functions
 │   ├── data/                       # Data loading and preprocessing
 │   │   ├── loader.py               # Path loaders
 │   │   ├── preprocessing.py        # Image preprocessing utilities
+│   │   ├── replacement.py          # Image obfuscation / replacement strategies
 │   │   └── segmentation.py         # Segmentation utilities (hex/square grids)
 │   ├── scoring/                    # Scoring
 │   │   ├── segments.py             # Surrogate dataset creation and segment scoring
 │   │   └── hyperpixel.py           # Hyperpixel evaluation and selection
 │   ├── explainer/                  # Core explainer implementation
 │   │   ├── ciao_explainer.py       # Main CIAO explainer class
-│   │   └── strategies.py           # Configuration dataclasses (methods, segmentation, replacement)
+│   │   └── methods.py              # Strategy methods for replacements, segmentations, and explainers
 │   ├── model/                      # Model inference and predictions
 │   │   └── predictor.py            # ModelPredictor class for inference
 │   ├── visualization/              # Visualization tools
