@@ -28,7 +28,7 @@ def build_all_hyperpixels(
     and sorting the final results.
 
     Args:
-        method: Configuration object for the explanation method. Default is LookaheadMethod.
+        method: A callable strategy for constructing a single hyperpixel. Default is LookaheadMethod.
         predictor: Model predictor
         input_batch: Preprocessed image batch
         replacement_image: Replacement tensor
