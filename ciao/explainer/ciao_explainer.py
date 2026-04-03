@@ -9,7 +9,7 @@ from ciao.algorithm.builder import build_all_hyperpixels
 from ciao.data.preprocessing import load_and_preprocess_image
 from ciao.data.replacement import MeanColorReplacement
 from ciao.data.segmentation import HexagonalSegmentation
-from ciao.explainer.strategies import (
+from ciao.explainer.methods import (
     ExplanationMethod,
     LookaheadMethod,
     Replacement,

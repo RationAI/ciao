@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 from ciao.algorithm.graph import ImageGraph
-from ciao.explainer.strategies import SegmentationMethod
+from ciao.explainer.methods import SegmentationMethod
 
 
 def _hex_round_vectorized(

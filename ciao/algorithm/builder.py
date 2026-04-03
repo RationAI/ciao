@@ -4,7 +4,7 @@ import torch
 
 from ciao.algorithm.context import SearchContext
 from ciao.algorithm.graph import ImageGraph
-from ciao.explainer.strategies import ExplanationMethod, LookaheadMethod
+from ciao.explainer.methods import ExplanationMethod, LookaheadMethod
 from ciao.model.predictor import ModelPredictor
 from ciao.scoring.hyperpixel import HyperpixelResult
 

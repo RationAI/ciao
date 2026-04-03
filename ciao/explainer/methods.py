@@ -1,4 +1,4 @@
-"""Dataclasses for explanation methods, replacement strategies, and segmentation strategies."""
+"""Base interfaces and implementations for explanation methods."""
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass

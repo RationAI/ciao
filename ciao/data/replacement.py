@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import torch
 import torchvision.transforms.functional as TF
 
-from ciao.explainer.strategies import Replacement
+from ciao.explainer.methods import Replacement
 
 
 # ImageNet normalization constants
