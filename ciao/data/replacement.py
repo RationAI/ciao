@@ -101,6 +101,10 @@ class SolidColorReplacement(Replacement):
     color: tuple[int, int, int] = (0, 0, 0)
 
     def __post_init__(self) -> None:
+        if len(self.color) != 3:
+            raise ValueError(
+                f"RGB color tuple must have exactly 3 elements, got {len(self.color)}"
+            )
         if not all(0 <= c <= 255 for c in self.color):
             raise ValueError(
                 f"RGB color values must be between 0 and 255, got {self.color}"

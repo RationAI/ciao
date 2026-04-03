@@ -24,9 +24,9 @@ class LookaheadMethod(ExplanationMethod):
     lookahead_distance: int = 2
 
     def __post_init__(self) -> None:
-        if self.lookahead_distance < 0:
+        if self.lookahead_distance < 1:
             raise ValueError(
-                f"lookahead_distance must be >= 0, got {self.lookahead_distance}"
+                f"lookahead_distance must be >= 1, got {self.lookahead_distance}"
             )
 
     def __call__(self, ctx: SearchContext) -> HyperpixelResult:

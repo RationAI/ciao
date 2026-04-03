@@ -215,8 +215,8 @@ class SquareSegmentation(SegmentationMethod):
     def __post_init__(self) -> None:
         if self.square_size <= 0:
             raise ValueError(f"square_size must be > 0, got {self.square_size}")
-        if self.neighborhood <= 0:
-            raise ValueError(f"neighborhood must be > 0, got {self.neighborhood}")
+        if self.neighborhood not in (4, 8):
+            raise ValueError(f"neighborhood must be 4 or 8, got {self.neighborhood}")
 
     def __call__(self, image: torch.Tensor) -> ImageGraph:
         return _create_square_grid(
