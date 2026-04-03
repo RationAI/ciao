@@ -97,10 +97,6 @@ def calculate_hyperpixel_deltas(
     if not segment_sets:
         return []
 
-    for i, segment_ids in enumerate(segment_sets):
-        if not segment_ids:
-            raise ValueError(f"Empty segment set at index {i}")
-
     input_batch, replacement_image, gpu_segments = _prepare_tensors_for_model(
         predictor, input_batch, replacement_image, segments
     )

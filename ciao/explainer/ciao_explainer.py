@@ -63,7 +63,7 @@ class CIAOExplainer:
         Returns:
             ExplanationResult: ExplanationResult dataclass containing explanation artifacts and stats.
         """
-        # --- 1. Boundary Validations ---
+        # 1. Boundary Validations
         image_path = Path(image_path)
         if not image_path.is_file():
             raise FileNotFoundError(f"Image not found at: {image_path}")
@@ -88,7 +88,7 @@ class CIAOExplainer:
                 f"target_class_idx {target_class_idx} is out of bounds (0 to {len(class_names) - 1})"
             )
 
-        # --- 2. Setup & Heavy Lifting ---
+        # 2. Setup of the image
         input_tensor = load_and_preprocess_image(image_path, device=predictor.device)
         input_batch = input_tensor.unsqueeze(0)  # Add batch dimension
 
@@ -116,16 +116,22 @@ class CIAOExplainer:
         if target_class_idx is None:
             target_class_idx = predictor.get_predicted_class(input_batch)
 
+            if target_class_idx < 0 or target_class_idx >= len(class_names):
+                raise ValueError(
+                    f"Model predicted class index {target_class_idx}, but class_names "
+                    f"only has {len(class_names)} items. Check predictor configuration."
+                )
+
         # 4. Create segmentation
         image_graph = segmentation(input_tensor)
         num_segments = image_graph.num_segments
 
-        # Fail if segmentation is empty
         if num_segments == 0:
             raise ValueError(
                 "Cannot generate explanation: The image contains 0 segments. "
                 "Please check your segmentation algorithm and parameters."
             )
+
         # 5. Calculate base scores from surrogate dataset
         X, y = create_surrogate_dataset(
             predictor=predictor,
@@ -153,7 +159,6 @@ class CIAOExplainer:
 
         class_name = class_names[target_class_idx]
 
-        # Return results
         return ExplanationResult(
             input_batch=input_batch,
             target_class_idx=target_class_idx,
