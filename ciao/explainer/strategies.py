@@ -33,16 +33,7 @@ class LookaheadMethod(ExplanationMethod):
         from ciao.algorithm.lookahead import build_hyperpixel_greedy_lookahead
 
         return build_hyperpixel_greedy_lookahead(
-            predictor=ctx.predictor,
-            input_batch=ctx.input_batch,
-            replacement_image=ctx.replacement_image,
-            image_graph=ctx.image_graph,
-            target_class_idx=ctx.target_class_idx,
-            seed_idx=ctx.seed_idx,
-            optimization_sign=ctx.optimization_sign,
-            used_segments=set(ctx.used_segments),
-            desired_length=ctx.desired_length,
-            batch_size=ctx.batch_size,
+            ctx=ctx,
             lookahead_distance=self.lookahead_distance,
         )
 
