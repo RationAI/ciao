@@ -33,19 +33,6 @@ def build_hyperpixel_greedy_lookahead(
     image_graph = ctx.image_graph
     used_segments = ctx.used_segments
 
-    if desired_length < 1:
-        raise ValueError(f"desired_length must be >= 1, got {desired_length}")
-    if lookahead_distance < 1:
-        raise ValueError(f"lookahead_distance must be >= 1, got {lookahead_distance}")
-    if optimization_sign not in (1, -1):
-        raise ValueError(f"optimization_sign must be 1 or -1, got {optimization_sign}")
-    if seed_idx < 0 or seed_idx >= image_graph.num_segments:
-        raise ValueError(
-            f"seed_idx {seed_idx} is out of bounds (0 to {image_graph.num_segments - 1})"
-        )
-    if seed_idx in used_segments:
-        raise ValueError(f"seed_idx {seed_idx} is already in used_segments")
-
     current_region = frozenset([seed_idx])
     known_final_score: float | None = None
 

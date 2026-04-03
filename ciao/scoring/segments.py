@@ -49,8 +49,6 @@ def create_surrogate_dataset(
         raise ValueError(
             f"neighborhood_distance cannot be negative. Got {neighborhood_distance}."
         )
-    if not image_graph.adj_list:
-        raise ValueError("adj_list in image_graph cannot be empty.")
 
     # BFS algorithm
     local_groups = []

@@ -14,33 +14,6 @@ class HyperpixelResult:
     score: float
 
 
-def _validate_hyperpixel_inputs(
-    input_batch: torch.Tensor,
-    replacement_image: torch.Tensor,
-    segment_sets: Sequence[Set[int]],
-    batch_size: int,
-) -> None:
-    """Validate tensor shapes and parameters before delta computation."""
-    for i, segment_ids in enumerate(segment_sets):
-        if not segment_ids:
-            raise ValueError(f"Empty segment set at index {i}")
-
-    if input_batch.dim() != 4 or input_batch.shape[0] != 1:
-        raise ValueError(
-            f"input_batch must have shape [1, C, H, W], got {tuple(input_batch.shape)}"
-        )
-
-    expected_shape = input_batch.shape[1:]
-    if tuple(replacement_image.shape) != tuple(expected_shape):
-        raise ValueError(
-            "replacement_image must have shape [C, H, W] matching input_batch, "
-            f"got {tuple(replacement_image.shape)} vs expected {tuple(expected_shape)}"
-        )
-
-    if batch_size <= 0:
-        raise ValueError(f"batch_size must be positive, got {batch_size}")
-
-
 def _prepare_tensors_for_model(
     predictor: ModelPredictor,
     input_batch: torch.Tensor,
@@ -124,9 +97,10 @@ def calculate_hyperpixel_deltas(
     if not segment_sets:
         return []
 
-    _validate_hyperpixel_inputs(
-        input_batch, replacement_image, segment_sets, batch_size
-    )
+    for i, segment_ids in enumerate(segment_sets):
+        if not segment_ids:
+            raise ValueError(f"Empty segment set at index {i}")
+
     input_batch, replacement_image, gpu_segments = _prepare_tensors_for_model(
         predictor, input_batch, replacement_image, segments
     )
@@ -160,9 +134,6 @@ def select_top_hyperpixels(
     hyperpixels: list[HyperpixelResult], max_hyperpixels: int = 10
 ) -> list[HyperpixelResult]:
     """Select top hyperpixels by their primary algorithm-specific score."""
-    if max_hyperpixels <= 0:
-        raise ValueError(f"max_hyperpixels must be positive, got {max_hyperpixels}")
-
     return sorted(
         hyperpixels,
         key=lambda hp: abs(hp.score),

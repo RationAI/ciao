@@ -14,6 +14,10 @@ class ImageGraph:
     segments: torch.Tensor
     adj_list: list[frozenset[int]]
 
+    def __post_init__(self) -> None:
+        if not self.adj_list:
+            raise ValueError("ImageGraph cannot be empty (adj_list is empty).")
+
     @property
     def num_segments(self) -> int:
         return len(self.adj_list)
