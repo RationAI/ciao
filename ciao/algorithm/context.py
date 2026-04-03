@@ -8,7 +8,7 @@ from ciao.model.predictor import ModelPredictor
 
 @dataclass(frozen=True)
 class SearchContext:
-    """Immutable context object for the explanation hyperpixel search."""
+    """Immutable context object for the explanation region search."""
 
     predictor: ModelPredictor
     input_batch: torch.Tensor

@@ -1,15 +1,15 @@
-"""Unified hyperpixel builder orchestrating different search algorithms."""
+"""Unified region builder orchestrating different search algorithms."""
 
 import torch
 
 from ciao.algorithm.context import SearchContext
 from ciao.algorithm.graph import ImageGraph
 from ciao.model.predictor import ModelPredictor
-from ciao.scoring.hyperpixel import HyperpixelResult
+from ciao.scoring.region import RegionResult
 from ciao.typing import ExplanationMethodFn
 
 
-def build_all_hyperpixels(
+def build_all_regions(
     method: ExplanationMethodFn,
     predictor: ModelPredictor,
     input_batch: torch.Tensor,
@@ -17,11 +17,11 @@ def build_all_hyperpixels(
     image_graph: ImageGraph,
     target_class_idx: int,
     scores: dict[int, float],
-    max_hyperpixels: int,
+    max_regions: int,
     desired_length: int = 30,
     batch_size: int = 64,
-) -> list[HyperpixelResult]:
-    """Build multiple hyperpixels using the provided single-hyperpixel algorithm.
+) -> list[RegionResult]:
+    """Build multiple regions using the provided single-region algorithm.
 
     This function handles the outer loop for all search algorithms:
     finding seeds, calling the specific algorithm, updating used segments,
@@ -35,17 +35,17 @@ def build_all_hyperpixels(
         image_graph: Graph representation of image segments
         target_class_idx: Target class index
         scores: Base segment scores
-        max_hyperpixels: Maximum number of hyperpixels to construct
-        desired_length: Target number of segments per hyperpixel
+        max_regions: Maximum number of regions to construct
+        desired_length: Target number of segments per region
         batch_size: Batch size for model evaluation
 
     Returns:
-        List[HyperpixelResult]: list of HyperpixelResult objects sorted by absolute score
+        List[RegionResult]: list of RegionResult objects sorted by absolute score
     """
-    hyperpixels: list[HyperpixelResult] = []
+    regions: list[RegionResult] = []
     used_segments: set[int] = set()
 
-    for _ in range(max_hyperpixels):
+    for _ in range(max_regions):
         # Find best unprocessed seed
         available_segments = [
             seg_id for seg_id in scores if seg_id not in used_segments
@@ -72,21 +72,21 @@ def build_all_hyperpixels(
             batch_size=batch_size,
         )
 
-        # Call the dynamically provided algorithm for a single hyperpixel
+        # Call the dynamically provided algorithm for a single region
         result = method(ctx)
 
-        hyperpixel_region = result.region
+        region_region = result.region
 
-        if not hyperpixel_region:
+        if not region_region:
             raise RuntimeError(
                 f"Builder failed to generate any segments for seed {seed_idx}."
             )
 
         # Extract and update state
-        used_segments = used_segments | hyperpixel_region
-        hyperpixels.append(result)
+        used_segments = used_segments | region_region
+        regions.append(result)
 
     # Sort by absolute score
-    hyperpixels.sort(key=lambda x: abs(x.score), reverse=True)
+    regions.sort(key=lambda x: abs(x.score), reverse=True)
 
-    return hyperpixels
+    return regions

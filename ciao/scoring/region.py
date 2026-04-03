@@ -7,8 +7,8 @@ from ciao.model.predictor import ModelPredictor
 
 
 @dataclass
-class HyperpixelResult:
-    """Type definition for the output of hyperpixel building algorithms."""
+class RegionResult:
+    """Type definition for the output of region building algorithms."""
 
     region: frozenset[int]
     score: float
@@ -71,7 +71,7 @@ def _compute_batch_deltas(
     return deltas_tensor.tolist()
 
 
-def calculate_hyperpixel_deltas(
+def calculate_region_deltas(
     predictor: ModelPredictor,
     input_batch: torch.Tensor,
     segments: torch.Tensor,
@@ -80,7 +80,7 @@ def calculate_hyperpixel_deltas(
     target_class_idx: int,
     batch_size: int = 64,
 ) -> list[float]:
-    """Calculate masking deltas for hyperpixel candidates using batched inference.
+    """Calculate masking deltas for region candidates using batched inference.
 
     Args:
         predictor: ModelPredictor instance
@@ -126,12 +126,12 @@ def calculate_hyperpixel_deltas(
         return all_deltas
 
 
-def select_top_hyperpixels(
-    hyperpixels: list[HyperpixelResult], max_hyperpixels: int = 10
-) -> list[HyperpixelResult]:
-    """Select top hyperpixels by their primary algorithm-specific score."""
+def select_top_regions(
+    regions: list[RegionResult], max_regions: int = 10
+) -> list[RegionResult]:
+    """Select top regions by their primary algorithm-specific score."""
     return sorted(
-        hyperpixels,
+        regions,
         key=lambda hp: abs(hp.score),
         reverse=True,
-    )[:max_hyperpixels]
+    )[:max_regions]
