@@ -75,15 +75,15 @@ def build_all_regions(
         # Call the dynamically provided algorithm for a single region
         result = method(ctx)
 
-        region_region = result.region
+        current_region = result.region
 
-        if not region_region:
+        if not current_region:
             raise RuntimeError(
                 f"Builder failed to generate any segments for seed {seed_idx}."
             )
 
         # Extract and update state
-        used_segments = used_segments | region_region
+        used_segments = used_segments | current_region
         regions.append(result)
 
     # Sort by absolute score

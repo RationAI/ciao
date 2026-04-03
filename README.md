@@ -1,6 +1,6 @@
 # CIAO: Contextual Importance Assessment via Obfuscation
 
-An implementation of explainable AI techniques for image classification. CIAO identifies influential image regions by systematically segmenting images, obfuscating segments, and using search algorithms to find important regions (regions).
+An implementation of explainable AI techniques for image classification. CIAO identifies influential image regions by systematically segmenting images, obfuscating segments, and using search algorithms to find important regions.
 
 ## Overview
 

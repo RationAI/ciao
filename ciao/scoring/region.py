@@ -132,6 +132,6 @@ def select_top_regions(
     """Select top regions by their primary algorithm-specific score."""
     return sorted(
         regions,
-        key=lambda hp: abs(hp.score),
+        key=lambda r: abs(r.score),
         reverse=True,
     )[:max_regions]
