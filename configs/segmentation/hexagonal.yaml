@@ -1,0 +1,2 @@
+_target_: ciao.data.segmentation.HexagonalSegmentation
+hex_radius: 4

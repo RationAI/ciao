@@ -1,0 +1,3 @@
+_target_: ciao.data.segmentation.SquareSegmentation
+square_size: 4
+neighborhood: 4
