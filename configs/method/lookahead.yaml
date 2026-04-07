@@ -1,2 +1,2 @@
-_target_: ciao.explainer.methods.LookaheadMethod
+_target_: ciao.explainer.explanation_methods.make_lookahead_method
 lookahead_distance: 2

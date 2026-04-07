@@ -1,1 +1,2 @@
-_target_: ciao.data.replacement.MeanColorReplacement
+_target_: ciao.data.replacement.mean_color_replacement
+_partial_: true
