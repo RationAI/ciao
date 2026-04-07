@@ -1,18 +1,14 @@
 """CIAO explainer implementation."""
 
 from ciao.explainer.ciao_explainer import CIAOExplainer
-from ciao.explainer.methods import (
-    ExplanationMethod,
-    LookaheadMethod,
-    Replacement,
-    SegmentationMethod,
+from ciao.explainer.explanation_methods import (
+    ExplanationMethodFn,
+    make_lookahead_method,
 )
 
 
 __all__ = [
     "CIAOExplainer",
-    "ExplanationMethod",
-    "LookaheadMethod",
-    "Replacement",
-    "SegmentationMethod",
+    "ExplanationMethodFn",
+    "make_lookahead_method",
 ]

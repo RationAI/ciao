@@ -4,13 +4,13 @@ import torch
 
 from ciao.algorithm.context import SearchContext
 from ciao.algorithm.graph import ImageGraph
-from ciao.explainer.methods import ExplanationMethod, LookaheadMethod
+from ciao.explainer.explanation_methods import ExplanationMethodFn
 from ciao.model.predictor import ModelPredictor
 from ciao.scoring.hyperpixel import HyperpixelResult
 
 
 def build_all_hyperpixels(
-    method: ExplanationMethod | None,
+    method: ExplanationMethodFn,
     predictor: ModelPredictor,
     input_batch: torch.Tensor,
     replacement_image: torch.Tensor,
@@ -28,7 +28,7 @@ def build_all_hyperpixels(
     and sorting the final results.
 
     Args:
-        method: A callable strategy for constructing a single hyperpixel. Default is LookaheadMethod.
+        method: A callable strategy for constructing a single hyperpixel.
         predictor: Model predictor
         input_batch: Preprocessed image batch
         replacement_image: Replacement tensor
@@ -42,9 +42,6 @@ def build_all_hyperpixels(
     Returns:
         List[HyperpixelResult]: list of HyperpixelResult objects sorted by absolute score
     """
-    if method is None:
-        method = LookaheadMethod()
-
     hyperpixels: list[HyperpixelResult] = []
     used_segments: set[int] = set()
 

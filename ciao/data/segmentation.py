@@ -1,11 +1,13 @@
 import math
-from dataclasses import dataclass
+from collections.abc import Callable
 
 import numpy as np
 import torch
 
 from ciao.algorithm.graph import ImageGraph
-from ciao.explainer.methods import SegmentationMethod
+
+
+SegmentationFn = Callable[[torch.Tensor], ImageGraph]
 
 
 def _hex_round_vectorized(
@@ -191,36 +193,46 @@ def _create_hexagonal_grid(
     return ImageGraph(segments=segments, adj_list=adj_list)
 
 
-@dataclass
-class HexagonalSegmentation(SegmentationMethod):
-    """Configuration for hexagonal grid segmentation."""
+def make_hexagonal_segmentation(hex_radius: int = 4) -> SegmentationFn:
+    """Return a function that segments images into a hexagonal grid.
 
-    hex_radius: int = 4
+    Args:
+        hex_radius: Distance from hexagon center to flat edge.
 
-    def __post_init__(self) -> None:
-        if self.hex_radius <= 0:
-            raise ValueError(f"hex_radius must be > 0, got {self.hex_radius}")
+    Returns:
+        SegmentationFn: A callable that generates a hexagonal ImageGraph.
+    """
+    if hex_radius <= 0:
+        raise ValueError(f"hex_radius must be > 0, got {hex_radius}")
 
-    def __call__(self, image: torch.Tensor) -> ImageGraph:
-        return _create_hexagonal_grid(image, hex_radius=self.hex_radius)
+    def segmentation(image: torch.Tensor) -> ImageGraph:
+        return _create_hexagonal_grid(image, hex_radius=hex_radius)
+
+    return segmentation
 
 
-@dataclass
-class SquareSegmentation(SegmentationMethod):
-    """Configuration for square grid segmentation."""
+def make_square_segmentation(
+    square_size: int = 4, neighborhood: int = 8
+) -> SegmentationFn:
+    """Return a function that segments images into a square grid.
 
-    square_size: int = 4
-    neighborhood: int = 8
+    Args:
+        square_size: Size of each square segment block edge.
+        neighborhood: Type of neighborhood connectivity (4 or 8).
 
-    def __post_init__(self) -> None:
-        if self.square_size <= 0:
-            raise ValueError(f"square_size must be > 0, got {self.square_size}")
-        if self.neighborhood not in (4, 8):
-            raise ValueError(f"neighborhood must be 4 or 8, got {self.neighborhood}")
+    Returns:
+        SegmentationFn: A callable that generates a square bounding ImageGraph.
+    """
+    if square_size <= 0:
+        raise ValueError(f"square_size must be > 0, got {square_size}")
+    if neighborhood not in (4, 8):
+        raise ValueError(f"neighborhood must be 4 or 8, got {neighborhood}")
 
-    def __call__(self, image: torch.Tensor) -> ImageGraph:
+    def segmentation(image: torch.Tensor) -> ImageGraph:
         return _create_square_grid(
             image,
-            square_size=self.square_size,
-            neighborhood=self.neighborhood,
+            square_size=square_size,
+            neighborhood=neighborhood,
         )
+
+    return segmentation
