@@ -7,15 +7,13 @@ import torch
 
 from ciao.algorithm.builder import build_all_hyperpixels
 from ciao.data.preprocessing import load_and_preprocess_image
-from ciao.data.replacement import ReplacementFn
-from ciao.data.segmentation import SegmentationFn
-from ciao.explainer.explanation_methods import ExplanationMethodFn
 from ciao.model.predictor import ModelPredictor
 from ciao.scoring.hyperpixel import HyperpixelResult
 from ciao.scoring.segments import (
     calculate_segment_scores,
     create_surrogate_dataset,
 )
+from ciao.typing import ExplanationMethodFn, ReplacementFn, SegmentationFn
 
 
 @dataclass

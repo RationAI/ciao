@@ -1,12 +1,10 @@
 """Image replacement strategies for masking operations."""
 
-from collections.abc import Callable
-
 import torch
 import torchvision.transforms.functional as TF
 
+from ciao.typing import ReplacementFn
 
-ReplacementFn = Callable[[torch.Tensor], torch.Tensor]
 
 # ImageNet normalization constants
 IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406])

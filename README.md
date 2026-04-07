@@ -115,6 +115,7 @@ ciao/
 │   ├── visualization/              # Visualization tools
 │   │   ├── visualization.py        # Interactive visualizations
 │   │   └── visualize_tree.py       # Tree/graph visualization utilities
+│   ├── typing.py                   # Type aliases and definitions
 │   └── __main__.py                 # CLI entry point
 ├── configs/                        # Hydra configuration files
 │   ├── ciao.yaml                   # Main entry point

@@ -4,9 +4,9 @@ import torch
 
 from ciao.algorithm.context import SearchContext
 from ciao.algorithm.graph import ImageGraph
-from ciao.explainer.explanation_methods import ExplanationMethodFn
 from ciao.model.predictor import ModelPredictor
 from ciao.scoring.hyperpixel import HyperpixelResult
+from ciao.typing import ExplanationMethodFn
 
 
 def build_all_hyperpixels(

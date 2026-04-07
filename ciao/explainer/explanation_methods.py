@@ -1,12 +1,8 @@
 """Base interfaces and implementations for explanation methods."""
 
-from collections.abc import Callable
-
 from ciao.algorithm.context import SearchContext
 from ciao.scoring.hyperpixel import HyperpixelResult
-
-
-ExplanationMethodFn = Callable[[SearchContext], HyperpixelResult]
+from ciao.typing import ExplanationMethodFn
 
 
 def make_lookahead_method(lookahead_distance: int = 2) -> ExplanationMethodFn:

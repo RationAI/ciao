@@ -1,13 +1,10 @@
 import math
-from collections.abc import Callable
 
 import numpy as np
 import torch
 
 from ciao.algorithm.graph import ImageGraph
-
-
-SegmentationFn = Callable[[torch.Tensor], ImageGraph]
+from ciao.typing import SegmentationFn
 
 
 def _hex_round_vectorized(
