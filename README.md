@@ -109,7 +109,7 @@ ciao/
 │   │   └── hyperpixel.py           # Hyperpixel evaluation and selection
 │   ├── explainer/                  # Core explainer implementation
 │   │   ├── ciao_explainer.py       # Main CIAO explainer class
-│   │   └── methods.py              # Strategy methods for replacements, segmentations, and explainers
+│   │   └── explanation_methods.py  # Methods for the explanation algorithms
 │   ├── model/                      # Model inference and predictions
 │   │   └── predictor.py            # ModelPredictor class for inference
 │   ├── visualization/              # Visualization tools

@@ -95,9 +95,10 @@ def interlacing_replacement(image: torch.Tensor) -> torch.Tensor:
     """
     _, height, width = image.shape
     replacement_image = image.clone()
+    device = image.device
 
-    even_row_indices = torch.arange(0, height, 2)
-    even_col_indices = torch.arange(0, width, 2)
+    even_row_indices = torch.arange(0, height, 2, device=device)
+    even_col_indices = torch.arange(0, width, 2, device=device)
 
     replacement_image[:, :, even_col_indices] = torch.flip(
         replacement_image[:, :, even_col_indices], dims=[1]
