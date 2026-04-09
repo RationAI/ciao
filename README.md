@@ -69,7 +69,7 @@ uv run python -m ciao
 - **MC-RAVE**: MCTS with Rapid Action Value Estimation
 - **MCGS (Monte Carlo Graph Search)**: Graph-based variant allowing revisiting of states
 - **MCGS-RAVE**: MCGS with RAVE enhancements
-- **Lookahead**: Greedy search with lookahead using efficient bitset operations
+- **Lookahead**: Greedy search with lookahead
 - **Potential**: Potential field-guided sequential search
 
 ### Segmentation Methods
@@ -92,17 +92,17 @@ ciao/
 │   ├── algorithm/                  # Search algorithms and data structures
 │   │   ├── mcts.py                 # Monte Carlo Tree Search
 │   │   ├── mcgs.py                 # Monte Carlo Graph Search
-│   │   ├── lookahead_bitset.py     # Greedy lookahead with bitsets
+│   │   ├── lookahead.py            # Greedy lookahead
 │   │   ├── potential.py            # Potential-based search
-│   │   ├── bitmask_graph.py        # Bitset operations for hyperpixels
+│   │   ├── graph.py                # Graph helpers
 │   │   ├── nodes.py                # Node classes for tree/graph search
 │   │   └── search_helpers.py       # Shared MCTS/MCGS helper functions
 │   ├── data/                       # Data loading and preprocessing
 │   │   ├── loader.py               # Path loaders
 │   │   ├── preprocessing.py        # Image preprocessing utilities
 │   │   └── segmentation.py         # Segmentation utilities (hex/square grids)
-│   ├── evaluation/                 # Scoring and evaluation
-│   │   ├── surrogate.py            # Surrogate dataset creation and segment scoring
+│   ├── scoring/                    # Scoring
+│   │   ├── segments.py             # Surrogate dataset creation and segment scoring
 │   │   └── hyperpixel.py           # Hyperpixel evaluation and selection
 │   ├── explainer/                  # Core explainer implementation
 │   │   └── ciao_explainer.py       # Main CIAO explainer class
