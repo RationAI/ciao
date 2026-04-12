@@ -27,3 +27,27 @@ def make_lookahead_method(lookahead_distance: int = 2) -> ExplanationMethodFn:
         )
 
     return method
+
+
+def make_potential_method(num_simulations: int = 10) -> ExplanationMethodFn:
+    """Return a function that generates a potential-based region building strategy.
+
+    Args:
+        num_simulations: Number of Monte Carlo simulations per frontier node.
+
+    Returns:
+        ExplanationMethodFn: Method computing contextual importance via potential search.
+    """
+    if num_simulations < 1:
+        raise ValueError(f"num_simulations must be >= 1, got {num_simulations}")
+
+    def method(ctx: SearchContext) -> RegionResult:
+        """Find the region via sequential Monte Carlo with potential-based selection."""
+        from ciao.algorithm.potential import build_region_potential
+
+        return build_region_potential(
+            ctx=ctx,
+            num_simulations=num_simulations,
+        )
+
+    return method
