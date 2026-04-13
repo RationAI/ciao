@@ -1,12 +1,18 @@
-"""Monte Carlo Tree Search for Connected Image Segments.
+"""Monte Carlo Tree Search for connected image regions.
 
 Supports:
 - Batch collection and evaluation for GPU efficiency
-- Virtual loss for parallel safety
+- Virtual loss for parallel safety (via ``pending`` counters)
 - Terminal caching to avoid re-evaluating visited states
 - MAX backup for finding peak explanations
+- Local UCT normalization across a node's children
 
-State = integer bitmask of selected segments
+Selection details:
+- ``Q_eff(s,a) = Q(s,a) - w * V_L * |Q(s,a)|``
+- ``Q_norm`` is local min-max normalization to ``[-1, 1]``
+- ``UCT(s,a) = Q_norm + C * sqrt(ln(sum N) / n_j)``
+
+State is represented as ``frozenset[int]`` of selected segment IDs.
 """
 
 import math
@@ -34,34 +40,39 @@ def select_uct_child(
     node: MCTSNode,
     exploration_c: float,
     virtual_loss: float,
-    best_score: float,
-    worst_score: float,
 ) -> MCTSNode | None:
-    """Select child with highest UCT score using Min-Max Normalized Q-value and Virtual Loss."""
+    """Select child with highest UCT score using local normalization."""
+    children = list(node.children.values())
+    if not children:
+        return None
+
+    q_eff_values: list[float] = []
+    total_n = 0
+    for child in children:
+        # Use max backup value; keep unvisited children at a neutral baseline.
+        q_value = child.max_value if child.visits > 0 else 0.0
+
+        # Apply virtual loss through the pending counter.
+        q_eff = q_value - virtual_loss * child.pending * abs(q_value)
+        q_eff_values.append(q_eff)
+        total_n += child.visits + child.pending
+
+    min_q_eff = min(q_eff_values)
+    max_q_eff = max(q_eff_values)
+
     best_uct = -float("inf")
     best_child = None
 
-    parent_visits = node.visits + node.pending
-
-    for child in node.children.values():
-        # Min-max normalize max_value to [0, 1]
-        if (
-            child.visits > 0
-            and best_score != -float("inf")
-            and worst_score != float("inf")
-        ):
-            q_bar = (child.max_value - worst_score) / (best_score - worst_score + 1e-6)
-            q_bar = max(0.0, min(1.0, q_bar))  # clip to [0, 1]
+    for child, q_eff in zip(children, q_eff_values, strict=True):
+        if max_q_eff > min_q_eff:
+            q_norm = (2.0 * (q_eff - min_q_eff) / (max_q_eff - min_q_eff)) - 1.0
         else:
-            q_bar = 1.0  # Optimistic initialization for unvisited nodes
+            q_norm = 1.0
 
-        # Exploration term
         explore = exploration_c * math.sqrt(
-            math.log(max(1, parent_visits)) / max(1, child.visits + child.pending)
+            math.log(total_n) / (child.visits + child.pending)
         )
-
-        # UCT formula combination - TODO: is subtracting that term necessary?
-        score = max(0, q_bar - (child.pending * virtual_loss)) + explore
+        score = q_norm + explore
 
         if score > best_uct:
             best_uct = score
@@ -125,8 +136,6 @@ def _collect_mcts_batch(
     root: MCTSNode,
     exploration_c: float,
     virtual_loss: float,
-    best_score: float,
-    worst_score: float,
 ) -> tuple[list[list[MCTSNode]], list[frozenset[int]], list[float | None]]:
     """Phase 1: Batch Collection - Selection, Expansion, and Simulation."""
     batch_paths: list[list[MCTSNode]] = []
@@ -144,9 +153,7 @@ def _collect_mcts_batch(
         ) and not is_terminal(
             node.region, ctx.image_graph, ctx.used_segments, ctx.desired_length
         ):
-            child = select_uct_child(
-                node, exploration_c, virtual_loss, best_score, worst_score
-            )
+            child = select_uct_child(node, exploration_c, virtual_loss)
 
             if child is None:
                 raise RuntimeError(
@@ -271,7 +278,6 @@ def build_region_mcts(
 
     best_region = root.region
     best_score = -float("inf")
-    worst_score = float("inf")
 
     # --- MAIN MCTS LOOP ---
     for _ in tqdm(range(num_iterations), desc="MCTS", unit="iter"):
@@ -281,8 +287,6 @@ def build_region_mcts(
             root=root,
             exploration_c=exploration_c,
             virtual_loss=virtual_loss,
-            best_score=best_score,
-            worst_score=worst_score,
         )
 
         # --- PHASE 2: BATCH EVALUATION ---
@@ -297,8 +301,6 @@ def build_region_mcts(
             if reward > best_score:
                 best_score = reward
                 best_region = batch_rollout_regions[i]
-            if reward < worst_score:
-                worst_score = reward
 
         # --- PHASE 3: BATCH BACKUP ---
         backup_paths(batch_paths, batch_rewards)
