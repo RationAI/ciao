@@ -10,7 +10,7 @@ Supports:
 Selection details:
 - ``Q_eff(s,a) = Q(s,a) - w * V_L * |Q(s,a)|``
 - ``Q_norm`` is local min-max normalization to ``[-1, 1]``
-- ``UCT(s,a) = Q_norm + C * sqrt(ln(sum N) / n_j)``
+- ``UCT(s,a) = Q_norm + C * sqrt(ln(N_parent) / n_j)``
 
 State is represented as ``frozenset[int]`` of selected segment IDs.
 """
@@ -32,8 +32,7 @@ def is_fully_expanded(
 ) -> bool:
     """Check if all frontier segments have been expanded as children."""
     frontier = image_graph.get_frontier(node.region, used_region)
-
-    return all(seg_id in node.children for seg_id in frontier)
+    return frontier.issubset(node.children)
 
 
 def select_uct_child(
@@ -47,7 +46,6 @@ def select_uct_child(
         return None
 
     q_eff_values: list[float] = []
-    total_n = 0
     for child in children:
         # Use max backup value; keep unvisited children at a neutral baseline.
         q_value = child.max_value if child.visits > 0 else 0.0
@@ -55,7 +53,8 @@ def select_uct_child(
         # Apply virtual loss through the pending counter.
         q_eff = q_value - virtual_loss * child.pending * abs(q_value)
         q_eff_values.append(q_eff)
-        total_n += child.visits + child.pending
+
+    parent_n = node.visits + node.pending
 
     min_q_eff = min(q_eff_values)
     max_q_eff = max(q_eff_values)
@@ -69,9 +68,8 @@ def select_uct_child(
         else:
             q_norm = 1.0
 
-        explore = exploration_c * math.sqrt(
-            math.log(total_n) / (child.visits + child.pending)
-        )
+        child_n = child.visits + child.pending
+        explore = exploration_c * math.sqrt(math.log(parent_n) / child_n)
         score = q_norm + explore
 
         if score > best_uct:
@@ -97,11 +95,7 @@ def expand_node(
         New child node if created, None if no expansion possible
     """
     frontier = image_graph.get_frontier(node.region, used_region)
-
-    unexpanded = []
-    for seg_id in frontier:
-        if seg_id not in node.children:
-            unexpanded.append(seg_id)
+    unexpanded = [seg_id for seg_id in frontier if seg_id not in node.children]
 
     if not unexpanded:
         return None
@@ -125,8 +119,9 @@ def backup_paths(batch_paths: list[list[MCTSNode]], rewards: list[float]) -> Non
     - pending (release virtual loss)
     """
     for path, reward in zip(batch_paths, rewards, strict=True):
-        for node in path[1:]:  # Skip root (never incremented, so shouldn't decrement)
-            node.pending -= 1  # Release virtual loss
+        for node in path:
+            if node.pending > 0:
+                node.pending -= 1  # Release virtual loss where it was applied
             node.visits += 1
             node.max_value = max(node.max_value, reward)  # MAX backup
 
@@ -145,6 +140,7 @@ def _collect_mcts_batch(
     for _ in range(ctx.batch_size):
         # --- SELECTION ---
         node = root
+        node.pending += 1  # Count in-flight rollout starting at the root.
         path = [node]
 
         # Standard selection using MAX UCT
@@ -213,38 +209,37 @@ def _evaluate_mcts_batch(
     batch_rollout_regions: list[frozenset[int]],
     cached_rewards: list[float | None],
 ) -> list[float]:
-    """Phase 2: Batch Evaluation - Evaluate regions needing GPU and merge carefully."""
-    regions_to_evaluate = [
-        (i, batch_rollout_regions[i])
+    """Phase 2: Batch Evaluation - dedupe uncached regions and merge rewards."""
+    uncached_regions = [
+        batch_rollout_regions[i]
         for i, reward in enumerate(cached_rewards)
         if reward is None
     ]
+    unique_regions = list(dict.fromkeys(uncached_regions))
 
-    # Evaluate only regions that need GPU
-    gpu_rewards = []
-    if regions_to_evaluate:
-        _indices, regions = zip(*regions_to_evaluate, strict=True)
+    region_rewards: dict[frozenset[int], float] = {}
+    if unique_regions:
         raw_rewards = calculate_region_deltas(
             predictor=ctx.predictor,
             input_batch=ctx.input_batch,
             segments=ctx.image_graph.segments,
             replacement_image=ctx.replacement_image,
-            segment_sets=list(regions),
+            segment_sets=unique_regions,
             target_class_idx=ctx.target_class_idx,
             batch_size=ctx.batch_size,
         )
-        gpu_rewards = [r * ctx.optimization_sign for r in raw_rewards]
+        region_rewards = {
+            region: reward * ctx.optimization_sign
+            for region, reward in zip(unique_regions, raw_rewards, strict=True)
+        }
 
     # Merge GPU results with cached values (cached values are already signed)
     batch_rewards: list[float] = []
-    gpu_idx = 0
-
-    for cached_val in cached_rewards:
+    for idx, cached_val in enumerate(cached_rewards):
         if cached_val is not None:
             batch_rewards.append(cached_val)
         else:
-            batch_rewards.append(gpu_rewards[gpu_idx])
-            gpu_idx += 1
+            batch_rewards.append(region_rewards[batch_rollout_regions[idx]])
 
     return batch_rewards
 
