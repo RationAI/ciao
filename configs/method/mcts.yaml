@@ -1,0 +1,4 @@
+_target_: ciao.explainer.explanation_methods.make_mcts_method
+num_iterations: 100
+exploration_c: 1.4
+virtual_loss: 1.0
