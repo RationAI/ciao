@@ -27,3 +27,30 @@ def make_lookahead_method(lookahead_distance: int = 2) -> ExplanationMethodFn:
         )
 
     return method
+
+
+def make_beam_search_method(beam_width: int = 64) -> ExplanationMethodFn:
+    """Return a function that generates a beam-search region building strategy.
+
+    Beam search expands connected regions using precomputed segment scores only,
+    then performs one final NN pass for the selected region.
+
+    Args:
+        beam_width: Number of best partial regions kept per depth.
+
+    Returns:
+        ExplanationMethodFn: Method computing contextual importance via beam search.
+    """
+    if beam_width < 1:
+        raise ValueError(f"beam_width must be >= 1, got {beam_width}")
+
+    def method(ctx: SearchContext) -> RegionResult:
+        """Find the region via score-only beam search."""
+        from ciao.algorithm.beam_search_precomputed import build_region_beam_search
+
+        return build_region_beam_search(
+            ctx=ctx,
+            beam_width=beam_width,
+        )
+
+    return method

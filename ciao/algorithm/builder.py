@@ -102,6 +102,7 @@ def build_all_regions(
             image_graph=image_graph,
             target_class_idx=target_class_idx,
             original_log_odds=original_log_odds,
+            segment_scores=scores,
             seed_idx=seed_idx,
             optimization_sign=optimization_sign,
             used_segments=frozenset(used_segments),
