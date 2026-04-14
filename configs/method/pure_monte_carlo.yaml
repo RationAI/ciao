@@ -1,0 +1,2 @@
+_target_: ciao.explainer.explanation_methods.make_pure_monte_carlo_method
+num_simulations: 100
