@@ -14,5 +14,5 @@ class MCTSNode:
         self.children: dict[int, MCTSNode] = {}
 
         self.visits = 0
-        self.max_value = -float("inf")
+        self.mean_value = 0.0
         self.pending = 0  # virtual loss counter
