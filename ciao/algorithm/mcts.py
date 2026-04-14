@@ -4,7 +4,7 @@ Supports:
 - Batch collection and evaluation for GPU efficiency
 - Virtual loss for parallel safety (via ``pending`` counters)
 - Terminal caching to avoid re-evaluating visited states
-- MAX backup for finding peak explanations
+- Mean backup for value estimation
 - Local UCT normalization across a node's children
 
 Selection details:
@@ -40,15 +40,18 @@ def select_uct_child(
     exploration_c: float,
     virtual_loss: float,
 ) -> MCTSNode | None:
-    """Select child with highest UCT score using local normalization."""
+    """Select child with highest UCT score using local normalization and FPU."""
     children = list(node.children.values())
     if not children:
         return None
 
+    # for FPU
+    parent_q = node.mean_value if node.visits > 0 else 0.0
+
     q_eff_values: list[float] = []
     for child in children:
-        # Use max backup value; keep unvisited children at a neutral baseline.
-        q_value = child.max_value if child.visits > 0 else 0.0
+        # FPU
+        q_value = child.mean_value if child.visits > 0 else parent_q
 
         # Apply virtual loss through the pending counter.
         q_eff = q_value - virtual_loss * child.pending * abs(q_value)
@@ -115,7 +118,7 @@ def backup_paths(batch_paths: list[list[MCTSNode]], rewards: list[float]) -> Non
 
     Updates:
     - visits
-    - max_value (MAX backup for selection)
+    - mean_value (mean backup for selection)
     - pending (release virtual loss)
     """
     for path, reward in zip(batch_paths, rewards, strict=True):
@@ -123,7 +126,7 @@ def backup_paths(batch_paths: list[list[MCTSNode]], rewards: list[float]) -> Non
             if node.pending > 0:
                 node.pending -= 1  # Release virtual loss where it was applied
             node.visits += 1
-            node.max_value = max(node.max_value, reward)  # MAX backup
+            node.mean_value += (reward - node.mean_value) / node.visits
 
 
 def _collect_mcts_batch(
@@ -143,7 +146,7 @@ def _collect_mcts_batch(
         node.pending += 1  # Count in-flight rollout starting at the root.
         path = [node]
 
-        # Standard selection using MAX UCT
+        # Standard selection using mean-value UCT
         while is_fully_expanded(
             node, ctx.image_graph, ctx.used_segments
         ) and not is_terminal(
@@ -181,7 +184,7 @@ def _collect_mcts_batch(
         ):
             # Reuse cached value - no GPU evaluation needed
             rollout_region = node.region
-            cached_rewards.append(node.max_value)
+            cached_rewards.append(node.mean_value)
         else:
             # Need GPU evaluation
             if is_terminal(
@@ -256,7 +259,7 @@ def build_region_mcts(
     - Batch collection and evaluation
     - Terminal caching to avoid re-evaluation
     - Virtual loss for parallel safety
-    - MAX backup for finding peak explanations
+    - Mean backup for value estimation
 
     Args:
         ctx: Search context with model state and parameters
