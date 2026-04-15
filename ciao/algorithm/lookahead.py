@@ -24,9 +24,15 @@ def build_hyperpixel_greedy_lookahead(
         ctx: Search context
         lookahead_distance: How many steps to look ahead (1=greedy, 2+=lookahead)
 
+    Raises:
+        ValueError: If lookahead_distance is less than 1.
+
     Returns:
         HyperpixelResult containing region and score
     """
+    if lookahead_distance < 1:
+        raise ValueError(f"lookahead_distance must be >= 1, got {lookahead_distance}")
+
     desired_length = ctx.desired_length
     optimization_sign = ctx.optimization_sign
     seed_idx = ctx.seed_idx

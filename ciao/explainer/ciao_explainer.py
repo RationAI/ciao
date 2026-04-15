@@ -124,13 +124,6 @@ class CIAOExplainer:
 
         # 4. Create segmentation
         image_graph = segmentation(input_tensor)
-        num_segments = image_graph.num_segments
-
-        if num_segments == 0:
-            raise ValueError(
-                "Cannot generate explanation: The image contains 0 segments. "
-                "Please check your segmentation algorithm and parameters."
-            )
 
         # 5. Calculate base scores from surrogate dataset
         X, y = create_surrogate_dataset(
