@@ -26,6 +26,18 @@ class ModelPredictor:
             probabilities = torch.nn.functional.softmax(outputs, dim=1)
             return probabilities
 
+    def get_predicted_class(self, input_batch: torch.Tensor) -> int:
+        """Get the most likely class index for a single input."""
+        if input_batch.dim() == 0 or input_batch.shape[0] != 1:
+            raise ValueError(
+                f"get_predicted_class expects a single input (batch size 1), but got shape {input_batch.shape}"
+            )
+
+        input_batch = input_batch.to(self.device)
+        with torch.no_grad():
+            outputs = self.model(input_batch)
+            return int(outputs.argmax(dim=1)[0].item())
+
     def get_class_logit_batch(
         self, input_batch: torch.Tensor, target_class_idx: int
     ) -> torch.Tensor:

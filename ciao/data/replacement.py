@@ -1,9 +1,15 @@
 """Image replacement strategies for masking operations."""
 
-from typing import Literal
-
 import torch
 import torchvision.transforms.functional as TF
+
+from ciao.explainer.strategies import (
+    BlurReplacement,
+    InterlacingReplacement,
+    MeanColorReplacement,
+    Replacement,
+    SolidColorReplacement,
+)
 
 
 # ImageNet normalization constants
@@ -40,32 +46,31 @@ def calculate_image_mean_color(input_tensor: torch.Tensor) -> torch.Tensor:
 
 def get_replacement_image(
     input_tensor: torch.Tensor,
-    replacement: Literal[
-        "mean_color", "interlacing", "blur", "solid_color"
-    ] = "mean_color",
-    color: tuple[int, int, int] = (0, 0, 0),
+    strategy: Replacement | None = None,
 ) -> torch.Tensor:
     """Generate replacement image for masking operations.
 
     Args:
         input_tensor: Input tensor [3, H, W] (ImageNet normalized)
-        replacement: Strategy - "mean_color", "interlacing", "blur", or "solid_color"
-        color: For solid_color mode, RGB tuple (0-255). Defaults to black (0, 0, 0)
+        strategy: Configuration object for mask strategy (defaults to MeanColorReplacement)
 
     Returns:
         replacement_image: torch tensor [3, H, W] on same device
     """
+    if strategy is None:
+        strategy = MeanColorReplacement()
+
     device = input_tensor.device
 
     # Extract spatial dimensions from input tensor
     _, height, width = input_tensor.shape
 
-    if replacement == "mean_color":
+    if isinstance(strategy, MeanColorReplacement):
         # Fill entire image with mean color
         mean_color = calculate_image_mean_color(input_tensor)  # [3, 1, 1]
         replacement_image = mean_color.expand(-1, height, width)  # [3, H, W]
 
-    elif replacement == "interlacing":
+    elif isinstance(strategy, InterlacingReplacement):
         # Create interlaced pattern: even columns flipped vertically, then even rows flipped horizontally
         replacement_image = input_tensor.clone()
         even_row_indices = torch.arange(0, height, 2)  # Even row indices
@@ -81,17 +86,19 @@ def get_replacement_image(
             replacement_image[:, even_row_indices, :], dims=[2]
         )
 
-    elif replacement == "blur":
+    elif isinstance(strategy, BlurReplacement):
         # Apply Gaussian blur using torchvision functional API
         input_batch = input_tensor.unsqueeze(0)  # [1, 3, H, W]
         replacement_image = TF.gaussian_blur(
-            input_batch, kernel_size=[7, 7], sigma=[1.5, 1.5]
+            input_batch,
+            kernel_size=list(strategy.kernel_size),
+            sigma=list(strategy.sigma),
         ).squeeze(0)  # [3, H, W]
 
-    elif replacement == "solid_color":
+    elif isinstance(strategy, SolidColorReplacement):
         # Fill with specified solid color (expects RGB values in 0-255 range)
         # Convert color to torch tensor
-        color_tensor = torch.tensor(color, dtype=torch.float32, device=device)
+        color_tensor = torch.tensor(strategy.color, dtype=torch.float32, device=device)
 
         # Convert from 0-255 range to 0-1 range
         color_tensor = color_tensor / 255.0
@@ -103,6 +110,6 @@ def get_replacement_image(
         replacement_image = normalized_color.expand(-1, height, width)  # [3, H, W]
 
     else:
-        raise ValueError(f"Unknown replacement strategy: {replacement}")
+        raise TypeError(f"Unknown replacement strategy: {type(strategy)}")
 
     return replacement_image
