@@ -6,25 +6,14 @@ Rolling horizon strategy: Look ahead multiple steps but only commit one step at 
 from collections import deque
 from collections.abc import Set
 
-import torch
-
+from ciao.algorithm.context import SearchContext
 from ciao.algorithm.graph import ImageGraph
-from ciao.model.predictor import ModelPredictor
 from ciao.scoring.hyperpixel import HyperpixelResult, calculate_hyperpixel_deltas
 
 
 def build_hyperpixel_greedy_lookahead(
-    predictor: ModelPredictor,
-    input_batch: torch.Tensor,
-    replacement_image: torch.Tensor,
-    image_graph: ImageGraph,
-    target_class_idx: int,
-    seed_idx: int,
-    desired_length: int,
+    ctx: SearchContext,
     lookahead_distance: int,
-    optimization_sign: int,
-    used_segments: Set[int],
-    batch_size: int = 64,
 ) -> HyperpixelResult:
     """Build a single hyperpixel using greedy lookahead with rolling horizon.
 
@@ -32,21 +21,18 @@ def build_hyperpixel_greedy_lookahead(
     but only commit the first step of the best path found.
 
     Args:
-        predictor: Model predictor
-        input_batch: Preprocessed image
-        replacement_image: Replacement tensor [C, H, W]
-        image_graph: Graph representation of image segments and their adjacencies
-        target_class_idx: Target class
-        seed_idx: Starting segment
-        desired_length: Target hyperpixel size
+        ctx: Search context
         lookahead_distance: How many steps to look ahead (1=greedy, 2+=lookahead)
-        optimization_sign: +1 to maximize, -1 to minimize
-        used_segments: Globally excluded segments
-        batch_size: Batch size for evaluation
 
     Returns:
         HyperpixelResult containing region and score
     """
+    desired_length = ctx.desired_length
+    optimization_sign = ctx.optimization_sign
+    seed_idx = ctx.seed_idx
+    image_graph = ctx.image_graph
+    used_segments = ctx.used_segments
+
     if desired_length < 1:
         raise ValueError(f"desired_length must be >= 1, got {desired_length}")
     if lookahead_distance < 1:
@@ -57,7 +43,7 @@ def build_hyperpixel_greedy_lookahead(
         raise ValueError(
             f"seed_idx {seed_idx} is out of bounds (0 to {image_graph.num_segments - 1})"
         )
-    if used_segments is not None and seed_idx in used_segments:
+    if seed_idx in used_segments:
         raise ValueError(f"seed_idx {seed_idx} is already in used_segments")
 
     current_region = frozenset([seed_idx])
@@ -81,13 +67,13 @@ def build_hyperpixel_greedy_lookahead(
         candidate_regions = list(candidates.keys())
 
         scores_list = calculate_hyperpixel_deltas(
-            predictor=predictor,
-            input_batch=input_batch,
+            predictor=ctx.predictor,
+            input_batch=ctx.input_batch,
             segments=image_graph.segments,
             segment_sets=candidate_regions,
-            replacement_image=replacement_image,
-            target_class_idx=target_class_idx,
-            batch_size=batch_size,
+            replacement_image=ctx.replacement_image,
+            target_class_idx=ctx.target_class_idx,
+            batch_size=ctx.batch_size,
         )
 
         # Find best candidate (maximize optimization_sign * score)
@@ -113,12 +99,12 @@ def build_hyperpixel_greedy_lookahead(
     # This could happen if we exhausted all candidates before reaching desired_length
     else:
         final_score = calculate_hyperpixel_deltas(
-            predictor=predictor,
-            input_batch=input_batch,
+            predictor=ctx.predictor,
+            input_batch=ctx.input_batch,
             segments=image_graph.segments,
             segment_sets=[current_region],
-            replacement_image=replacement_image,
-            target_class_idx=target_class_idx,
+            replacement_image=ctx.replacement_image,
+            target_class_idx=ctx.target_class_idx,
             batch_size=1,
         )[0]
 
@@ -169,7 +155,7 @@ def _generate_lookahead_candidates(
 
         frontier = image_graph.get_frontier(region, used_segments)
         for seg_id in frontier:
-            new_region = frozenset(region | {seg_id})
+            new_region = region | {seg_id}
 
             if new_region not in visited:
                 visited.add(new_region)

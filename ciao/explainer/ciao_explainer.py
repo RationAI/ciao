@@ -7,22 +7,13 @@ import torch
 
 from ciao.algorithm.builder import build_all_hyperpixels
 from ciao.data.preprocessing import load_and_preprocess_image
-from ciao.data.replacement import get_replacement_image
-from ciao.data.segmentation import create_segmentation
-from ciao.explainer.strategies import (
-    ExplanationMethod,
-    HexagonalSegmentation,
-    LookaheadMethod,
-    MeanColorReplacement,
-    Replacement,
-    SegmentationMethod,
-)
 from ciao.model.predictor import ModelPredictor
 from ciao.scoring.hyperpixel import HyperpixelResult
 from ciao.scoring.segments import (
     calculate_segment_scores,
     create_surrogate_dataset,
 )
+from ciao.typing import ExplanationMethodFn, ReplacementFn, SegmentationFn
 
 
 @dataclass
@@ -48,37 +39,30 @@ class CIAOExplainer:
         self,
         image_path: str | Path,
         predictor: ModelPredictor,
+        segmentation: SegmentationFn,
+        method: ExplanationMethodFn,
+        replacement: ReplacementFn,
         target_class_idx: int | None = None,
         max_hyperpixels: int = 10,
         desired_length: int = 30,
         batch_size: int = 64,
-        segmentation: SegmentationMethod | None = None,
-        method: ExplanationMethod | None = None,
-        replacement: Replacement | None = None,
     ) -> ExplanationResult:
         """Generate CIAO explanation for an image.
 
         Args:
             image_path: Path to image file (string or pathlib.Path)
             predictor: ModelPredictor instance
+            segmentation: Image segmentation function returning an ImageGraph.
+            method: Explanation method function evaluating search contexts sequentially.
+            replacement: Replacement strategy function generating an obfuscation mask.
             target_class_idx: Target class to explain (None = auto-select)
             max_hyperpixels: Maximum number of hyperpixels to build
             desired_length: Target number of segments per hyperpixel (default=30)
             batch_size: Batch size for model evaluation
-            segmentation: Image segmentation strategy object (default: HexagonalSegmentation). Possible methods include: HexagonalSegmentation and SquareSegmentation.
-            method: Hyperpixel construction method object. Callers can rely on upstream default (LookaheadMethod) or pass explicitly. Possible methods include: LookaheadMethod.
-            replacement: Masking strategy object (default: MeanColorReplacement). Possible methods include: MeanColorReplacement, InterlacingReplacement, BlurReplacement, and SolidColorReplacement.
 
         Returns:
             ExplanationResult: ExplanationResult dataclass containing explanation artifacts and stats.
         """
-        if segmentation is None:
-            segmentation = HexagonalSegmentation()
-        if method is None:
-            method = LookaheadMethod()
-        if replacement is None:
-            replacement = MeanColorReplacement()
-
         # Get class names from predictor
         class_names = predictor.class_names
 
@@ -86,14 +70,14 @@ class CIAOExplainer:
         input_tensor = load_and_preprocess_image(image_path, device=predictor.device)
         input_batch = input_tensor.unsqueeze(0)  # Add batch dimension
 
-        replacement_image = get_replacement_image(input_tensor, replacement)
+        replacement_image = replacement(input_tensor)
 
         # 2. Get target class
         if target_class_idx is None:
             target_class_idx = predictor.get_predicted_class(input_batch)
 
         # 3. Create segmentation
-        image_graph = create_segmentation(input_tensor, segmentation)
+        image_graph = segmentation(input_tensor)
         num_segments = image_graph.num_segments
 
         # Fail if segmentation is empty
