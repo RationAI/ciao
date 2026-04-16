@@ -63,31 +63,69 @@ class CIAOExplainer:
         Returns:
             ExplanationResult: ExplanationResult dataclass containing explanation artifacts and stats.
         """
-        # Get class names from predictor
-        class_names = predictor.class_names
+        # 1. Boundary Validations
+        image_path = Path(image_path)
+        if not image_path.is_file():
+            raise FileNotFoundError(f"Image not found at: {image_path}")
 
-        # 1. Load and preprocess image (use same device as predictor's model)
+        if not isinstance(predictor, ModelPredictor):
+            raise TypeError(
+                f"predictor must be a ModelPredictor instance, got {type(predictor).__name__}"
+            )
+
+        if max_hyperpixels <= 0:
+            raise ValueError(f"max_hyperpixels must be positive, got {max_hyperpixels}")
+        if desired_length <= 0:
+            raise ValueError(f"desired_length must be positive, got {desired_length}")
+        if batch_size <= 0:
+            raise ValueError(f"batch_size must be positive, got {batch_size}")
+
+        class_names = predictor.class_names
+        if target_class_idx is not None and (
+            target_class_idx < 0 or target_class_idx >= len(class_names)
+        ):
+            raise ValueError(
+                f"target_class_idx {target_class_idx} is out of bounds (0 to {len(class_names) - 1})"
+            )
+
+        # 2. Setup of the image
         input_tensor = load_and_preprocess_image(image_path, device=predictor.device)
         input_batch = input_tensor.unsqueeze(0)  # Add batch dimension
 
+        if input_batch.dim() != 4 or input_batch.shape[0] != 1:
+            raise ValueError(
+                f"input_batch must have shape [1, C, H, W], got {tuple(input_batch.shape)}"
+            )
+
         replacement_image = replacement(input_tensor)
 
-        # 2. Get target class
+        # Validate replacement output
+        expected_shape = input_batch.shape[1:]
+        if tuple(replacement_image.shape) != tuple(expected_shape):
+            raise ValueError(
+                "replacement_image must have shape [C, H, W] matching input_batch, "
+                f"got {tuple(replacement_image.shape)} vs expected {tuple(expected_shape)}"
+            )
+        if replacement_image.device != input_tensor.device:
+            raise ValueError(
+                f"replacement_image device ({replacement_image.device}) must match "
+                f"input_tensor device ({input_tensor.device})"
+            )
+
+        # 3. Get target class
         if target_class_idx is None:
             target_class_idx = predictor.get_predicted_class(input_batch)
 
-        # 3. Create segmentation
+            if target_class_idx < 0 or target_class_idx >= len(class_names):
+                raise ValueError(
+                    f"Model predicted class index {target_class_idx}, but class_names "
+                    f"only has {len(class_names)} items. Check predictor configuration."
+                )
+
+        # 4. Create segmentation
         image_graph = segmentation(input_tensor)
-        num_segments = image_graph.num_segments
 
-        # Fail if segmentation is empty
-        if num_segments == 0:
-            raise ValueError(
-                "Cannot generate explanation: The image contains 0 segments. "
-                "Please check your segmentation algorithm and parameters."
-            )
-
-        # 4. Calculate base scores from surrogate dataset
+        # 5. Calculate base scores from surrogate dataset
         X, y = create_surrogate_dataset(
             predictor=predictor,
             input_batch=input_batch,
@@ -98,7 +136,7 @@ class CIAOExplainer:
         )
         segment_scores = calculate_segment_scores(X, y)
 
-        # 5. Execute the builder loop
+        # 6. Execute the builder loop
         hyperpixels = build_all_hyperpixels(
             method=method,
             predictor=predictor,
@@ -112,13 +150,8 @@ class CIAOExplainer:
             batch_size=batch_size,
         )
 
-        class_name = (
-            class_names[target_class_idx]
-            if target_class_idx < len(class_names)
-            else f"Class {target_class_idx}"
-        )
+        class_name = class_names[target_class_idx]
 
-        # Return results
         return ExplanationResult(
             input_batch=input_batch,
             target_class_idx=target_class_idx,
