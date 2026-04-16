@@ -57,7 +57,7 @@ class CIAOExplainer:
             replacement: Replacement strategy function generating an obfuscation mask.
             target_class_idx: Target class to explain (None = auto-select)
             max_regions: Maximum number of regions to build
-            desired_length: Target number of segments per regions (default=30)
+            desired_length: Target number of segments per region (default=30)
             batch_size: Batch size for model evaluation
 
         Returns:

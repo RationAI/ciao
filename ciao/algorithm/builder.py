@@ -28,7 +28,7 @@ def build_all_regions(
     and sorting the final results.
 
     Args:
-        method: A callable strategy for constructing a single hyperpixel.
+        method: A callable strategy for constructing a single region.
         predictor: Model predictor
         input_batch: Preprocessed image batch
         replacement_image: Replacement tensor
