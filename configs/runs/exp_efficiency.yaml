@@ -1,0 +1,17 @@
+# @package _global_
+
+# Run with: python -m ciao --config-name runs/exp_efficiency
+defaults:
+  - /base
+  - override /data: pascal_sample
+  - override /method: lookahead
+  - override /metric: pure_score
+  - _self_
+
+desired_length: 50
+max_regions: 1
+batch_size: 64
+
+logger:
+  experiment_name: Search_Efficiency
+  run_name: "${data.name}_${method._target_}"
