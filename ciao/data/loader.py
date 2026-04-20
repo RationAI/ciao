@@ -17,6 +17,8 @@ def iter_image_paths(config: DictConfig) -> Iterator[Path]:
     Reads ``config.data.image_path`` (single image) or
     ``config.data.batch_path`` (directory), with an optional
     ``config.data.limit`` to cap the number of yielded paths.
+    For ``batch_path``, paths are yielded lazily in filesystem-traversal
+    order; ordering is not guaranteed to be stable across platforms.
 
     Args:
         config: Hydra config object containing data.image_path or data.batch_path
@@ -64,7 +66,7 @@ def iter_image_paths(config: DictConfig) -> Iterator[Path]:
             "Check for typos or incorrect path configuration."
         )
 
-    paths = sorted(
+    paths = (
         path
         for path in directory.rglob("*")
         if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS

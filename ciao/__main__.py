@@ -1,4 +1,5 @@
 import time
+from contextlib import nullcontext
 
 import hydra
 import mlflow
@@ -15,14 +16,29 @@ from ciao.model.predictor import ModelPredictor
 MLFLOW_LOG_BATCH_LIMIT = 1000
 
 
+def _flatten_params(obj: object, parent_key: str = "") -> dict[str, object]:
+    """Flatten a nested dict/list into dot/bracket-separated keys for MLflow params."""
+    items: dict[str, object] = {}
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            new_key = f"{parent_key}.{k}" if parent_key else str(k)
+            items.update(_flatten_params(v, new_key))
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            items.update(_flatten_params(v, f"{parent_key}[{i}]"))
+    else:
+        items[parent_key] = obj
+    return items
+
+
 @hydra.main(version_base=None, config_path="../configs", config_name="base")
 def main(cfg: DictConfig) -> None:
     mlflow.set_tracking_uri(cfg.logger.tracking_uri)
     mlflow.set_experiment(cfg.logger.experiment_name)
 
     with mlflow.start_run(run_name=cfg.logger.run_name):
-        params = OmegaConf.to_container(cfg, resolve=True)
-        mlflow.log_params(params)  # type: ignore[arg-type]
+        params = _flatten_params(OmegaConf.to_container(cfg, resolve=True))
+        mlflow.log_params(params)
 
         segmentation = instantiate(cfg.segmentation)
         method = instantiate(cfg.method)
@@ -37,11 +53,19 @@ def main(cfg: DictConfig) -> None:
 
         explainer = CIAOExplainer()
 
+        batch_mode = cfg.data.get("batch_path") is not None
+
         for image_path in iter_image_paths(cfg):
             print(f"Starting explanation for: {image_path}")
             start_time = time.perf_counter()
 
-            with mlflow.start_run(run_name=image_path.name, nested=True) as run:
+            run_ctx = (
+                mlflow.start_run(run_name=image_path.name, nested=True)
+                if batch_mode
+                else nullcontext(mlflow.active_run())
+            )
+            with run_ctx as run:
+                assert run is not None
                 results = explainer.explain(
                     image_path=image_path,
                     predictor=predictor,
