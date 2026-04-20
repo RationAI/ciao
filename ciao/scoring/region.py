@@ -133,18 +133,20 @@ def calculate_region_deltas(
         return all_deltas
 
 
-def calculate_region_probability_drop(
+def calculate_region_probability_drops(
     predictor: ModelPredictor,
     input_batch: torch.Tensor,
     segments: torch.Tensor,
     replacement_image: torch.Tensor,
     target_class_idx: int,
-    result: RegionResult,
-) -> RegionResult:
-    """Compute original and masked class probabilities for a finished region.
+    original_prob: float,
+    results: list[RegionResult],
+    batch_size: int = 64,
+) -> list[RegionResult]:
+    """Compute masked class probabilities for all finished regions in batched passes.
 
     Populates ``original_prob``, ``masked_prob``, and ``probability_drop``
-    on the given *result* (mutates in place **and** returns it for convenience).
+    on each given *result* (mutates in place **and** returns the list).
 
     Args:
         predictor: ModelPredictor instance
@@ -152,34 +154,37 @@ def calculate_region_probability_drop(
         segments: Pixel-to-segment mapping [H, W]
         replacement_image: Replacement tensor [C, H, W]
         target_class_idx: Target class index
-        result: RegionResult whose region will be masked
+        original_prob: Pre-computed unmasked probability for the target class
+        results: RegionResults whose regions will be masked
+        batch_size: Max regions per forward pass
 
     Returns:
-        The same RegionResult with probability fields populated.
+        The same RegionResults with probability fields populated.
     """
+    if not results:
+        return results
+
     input_batch, replacement_image, gpu_segments = _prepare_tensors_for_model(
         predictor, input_batch, replacement_image, segments
     )
 
-    with torch.no_grad():
-        # Original probability
-        original_probs = torch.nn.functional.softmax(
-            predictor.model(input_batch), dim=1
-        )
-        original_prob = original_probs[0, target_class_idx].item()
+    region_sets = [r.region for r in results]
+    masked_probs: list[float] = []
 
-        # Masked probability
-        mask_tensor = _build_mask_tensor(
-            gpu_segments, [result.region], predictor.device
-        )
+    for batch_start in range(0, len(region_sets), batch_size):
+        batch_end = min(batch_start + batch_size, len(region_sets))
+        slice_ = region_sets[batch_start:batch_end]
+        mask_tensor = _build_mask_tensor(gpu_segments, slice_, predictor.device)
         masked_input = _apply_masks(input_batch, mask_tensor, replacement_image)
-        masked_probs = torch.nn.functional.softmax(predictor.model(masked_input), dim=1)
-        masked_prob = masked_probs[0, target_class_idx].item()
+        probs = predictor.get_predictions(masked_input)[:, target_class_idx]
+        masked_probs.extend(probs.tolist())
 
-    result.original_prob = original_prob
-    result.masked_prob = masked_prob
-    result.probability_drop = original_prob - masked_prob
-    return result
+    for result, masked_prob in zip(results, masked_probs, strict=True):
+        result.original_prob = original_prob
+        result.masked_prob = masked_prob
+        result.probability_drop = original_prob - masked_prob
+
+    return results
 
 
 def select_top_regions(

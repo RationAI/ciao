@@ -61,9 +61,9 @@ def iter_image_paths(config: DictConfig) -> Iterator[Path]:
             "Check for typos or incorrect path configuration."
         )
 
-    paths = (
+    paths = sorted(
         path
-        for path in sorted(directory.rglob("*"))
+        for path in directory.rglob("*")
         if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
     )
 

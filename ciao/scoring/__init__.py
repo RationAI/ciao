@@ -3,7 +3,7 @@
 from ciao.scoring.region import (
     RegionResult,
     calculate_region_deltas,
-    calculate_region_probability_drop,
+    calculate_region_probability_drops,
     select_top_regions,
 )
 from ciao.scoring.segments import (
@@ -15,7 +15,7 @@ from ciao.scoring.segments import (
 __all__ = [
     "RegionResult",
     "calculate_region_deltas",
-    "calculate_region_probability_drop",
+    "calculate_region_probability_drops",
     "calculate_segment_scores",
     "create_surrogate_dataset",
     "select_top_regions",

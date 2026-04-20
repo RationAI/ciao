@@ -4,11 +4,15 @@ import hydra
 import mlflow
 import torch
 from hydra.utils import instantiate
+from mlflow.entities import Metric
 from omegaconf import DictConfig, OmegaConf
 
 from ciao.data.loader import iter_image_paths
 from ciao.explainer.ciao_explainer import CIAOExplainer
 from ciao.model.predictor import ModelPredictor
+
+
+MLFLOW_LOG_BATCH_LIMIT = 1000
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="base")
@@ -37,50 +41,73 @@ def main(cfg: DictConfig) -> None:
             print(f"Starting explanation for: {image_path}")
             start_time = time.perf_counter()
 
-            results = explainer.explain(
-                image_path=image_path,
-                predictor=predictor,
-                target_class_idx=cfg.target_class_idx,
-                max_regions=cfg.max_regions,
-                desired_length=cfg.desired_length,
-                batch_size=cfg.batch_size,
-                segmentation=segmentation,
-                method=method,
-                replacement=replacement,
-            )
-
-            elapsed = time.perf_counter() - start_time
-
-            # Log metrics for every region
-            for idx, region in enumerate(results.regions):
-                mlflow.log_metrics(
-                    {
-                        f"region_{idx}/final_score": region.score,
-                        f"region_{idx}/original_prob": region.original_prob,
-                        f"region_{idx}/masked_prob": region.masked_prob,
-                        f"region_{idx}/probability_drop": region.probability_drop,
-                        f"region_{idx}/evaluations_count": region.evaluations_count,
-                    }
+            with mlflow.start_run(run_name=image_path.name, nested=True) as run:
+                results = explainer.explain(
+                    image_path=image_path,
+                    predictor=predictor,
+                    target_class_idx=cfg.target_class_idx,
+                    max_regions=cfg.max_regions,
+                    desired_length=cfg.desired_length,
+                    batch_size=cfg.batch_size,
+                    segmentation=segmentation,
+                    method=method,
+                    replacement=replacement,
                 )
 
-                # Log trajectory for graphs
-                for item in region.trajectory:
-                    mlflow.log_metric(
-                        f"region_{idx}/trajectory_best_score",
-                        item["best_score"],
-                        step=int(item["evals"]),
+                elapsed = time.perf_counter() - start_time
+
+                # Log per-region summary metrics
+                for idx, region in enumerate(results.regions):
+                    mlflow.log_metrics(
+                        {
+                            f"region_{idx}/final_score": region.score,
+                            f"region_{idx}/original_prob": region.original_prob,
+                            f"region_{idx}/masked_prob": region.masked_prob,
+                            f"region_{idx}/probability_drop": region.probability_drop,
+                            f"region_{idx}/evaluations_count": region.evaluations_count,
+                        }
                     )
 
-            mlflow.log_metric("time_seconds", elapsed)
+                # Batch-log trajectory points for graphs
+                ts_ms = int(time.time() * 1000)
+                trajectory_metrics = [
+                    Metric(
+                        key=f"region_{idx}/trajectory_best_score",
+                        value=item["best_score"],
+                        timestamp=ts_ms,
+                        step=int(item["evals"]),
+                    )
+                    for idx, region in enumerate(results.regions)
+                    for item in region.trajectory
+                ]
+                if trajectory_metrics:
+                    client = mlflow.MlflowClient()
+                    for start in range(
+                        0, len(trajectory_metrics), MLFLOW_LOG_BATCH_LIMIT
+                    ):
+                        client.log_batch(
+                            run_id=run.info.run_id,
+                            metrics=trajectory_metrics[
+                                start : start + MLFLOW_LOG_BATCH_LIMIT
+                            ],
+                        )
 
-            best_region = results.regions[0]
-            print(
-                f"Done: {image_path.name} | "
-                f"score={best_region.score:.4f} | "
-                f"prob_drop={best_region.probability_drop:.4f} | "
-                f"evals={best_region.evaluations_count} | "
-                f"time={elapsed:.1f}s"
-            )
+                mlflow.log_metric("time_seconds", elapsed)
+
+                if not results.regions:
+                    print(
+                        f"Done: {image_path.name} | no regions found | time={elapsed:.1f}s"
+                    )
+                    continue
+
+                best_region = results.regions[0]
+                print(
+                    f"Done: {image_path.name} | "
+                    f"score={best_region.score:.4f} | "
+                    f"prob_drop={best_region.probability_drop:.4f} | "
+                    f"evals={best_region.evaluations_count} | "
+                    f"time={elapsed:.1f}s"
+                )
 
 
 if __name__ == "__main__":
