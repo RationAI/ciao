@@ -34,6 +34,9 @@ def iter_image_paths(config: DictConfig) -> Iterator[Path]:
     batch_path_value = config.data.get("batch_path")
     limit: int | None = config.data.get("limit")
 
+    if limit is not None and limit < 0:
+        raise ValueError(f"data.limit must be non-negative, got: {limit}")
+
     if image_path_value and batch_path_value:
         raise ValueError("Specify exactly one of image_path or batch_path in config")
 
