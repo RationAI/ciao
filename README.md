@@ -35,7 +35,7 @@ uv run ciao
 Customize the explanation using Hydra configuration overrides:
 
 ```bash
-uv run ciao image_path=./my_image.jpg method=mcts segmentation=square
+uv run ciao data.image_path=./my_image.jpg method=lookahead segmentation=square
 ```
 
 Alternatively, run as a module:
