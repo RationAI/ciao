@@ -6,7 +6,7 @@ import torch
 
 from ciao.algorithm.graph import ImageGraph
 from ciao.model.predictor import ModelPredictor
-from ciao.scoring.hyperpixel import calculate_hyperpixel_deltas
+from ciao.scoring.region import calculate_region_deltas
 
 
 logger = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ def create_surrogate_dataset(
         local_groups.append(visited)
 
     # Calculate deltas for all local groups
-    deltas = calculate_hyperpixel_deltas(
+    deltas = calculate_region_deltas(
         predictor,
         input_batch,
         image_graph.segments,

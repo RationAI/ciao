@@ -57,7 +57,7 @@ class ImageGraph:
         target_length: int,
         used_segments: Set[int],
     ) -> frozenset[int]:
-        """Simulates a random walk to build a full hyperpixel.
+        """Simulates a random walk to build a full region.
 
         Args:
             base_region: Starting region

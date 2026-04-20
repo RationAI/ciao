@@ -1,4 +1,4 @@
-"""Greedy lookahead hyperpixel building with frozensets.
+"""Greedy lookahead region building with frozensets.
 
 Rolling horizon strategy: Look ahead multiple steps but only commit one step at a time.
 """
@@ -8,14 +8,14 @@ from collections.abc import Set
 
 from ciao.algorithm.context import SearchContext
 from ciao.algorithm.graph import ImageGraph
-from ciao.scoring.hyperpixel import HyperpixelResult, calculate_hyperpixel_deltas
+from ciao.scoring.region import RegionResult, calculate_region_deltas
 
 
-def build_hyperpixel_greedy_lookahead(
+def build_region_greedy_lookahead(
     ctx: SearchContext,
     lookahead_distance: int,
-) -> HyperpixelResult:
-    """Build a single hyperpixel using greedy lookahead with rolling horizon.
+) -> RegionResult:
+    """Build a single region using greedy lookahead with rolling horizon.
 
     Strategy: Look ahead up to lookahead_distance steps, evaluate all candidates,
     but only commit the first step of the best path found.
@@ -28,7 +28,7 @@ def build_hyperpixel_greedy_lookahead(
         ValueError: If lookahead_distance is less than 1.
 
     Returns:
-        HyperpixelResult containing region and score
+        RegionResult containing region and score
     """
     if lookahead_distance < 1:
         raise ValueError(f"lookahead_distance must be >= 1, got {lookahead_distance}")
@@ -42,7 +42,7 @@ def build_hyperpixel_greedy_lookahead(
     current_region = frozenset([seed_idx])
     known_final_score: float | None = None
 
-    # Grow hyperpixel one step at a time
+    # Grow region one step at a time
     while len(current_region) < desired_length:
         # Generate all candidate regions via BFS up to lookahead_distance
         candidates = _generate_lookahead_candidates(
@@ -59,7 +59,7 @@ def build_hyperpixel_greedy_lookahead(
         # Batch evaluate all candidates
         candidate_regions = list(candidates.keys())
 
-        scores_list = calculate_hyperpixel_deltas(
+        scores_list = calculate_region_deltas(
             predictor=ctx.predictor,
             input_batch=ctx.input_batch,
             segments=image_graph.segments,
@@ -91,7 +91,7 @@ def build_hyperpixel_greedy_lookahead(
         final_score = known_final_score
     # This could happen if we exhausted all candidates before reaching desired_length
     else:
-        final_score = calculate_hyperpixel_deltas(
+        final_score = calculate_region_deltas(
             predictor=ctx.predictor,
             input_batch=ctx.input_batch,
             segments=image_graph.segments,
@@ -101,7 +101,7 @@ def build_hyperpixel_greedy_lookahead(
             batch_size=1,
         )[0]
 
-    return HyperpixelResult(
+    return RegionResult(
         region=current_region,
         score=final_score,
     )
@@ -117,7 +117,7 @@ def _generate_lookahead_candidates(
     """Generate all connected supersets up to lookahead_distance steps via BFS.
 
     Args:
-        current_region: Frozenset of the currently built hyperpixel.
+        current_region: Frozenset of the currently built region.
         image_graph: Graph representation of image segments and their adjacencies.
         used_segments: Set of globally excluded or already used segments.
         lookahead_distance: Maximum depth for the BFS expansion.

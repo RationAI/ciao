@@ -5,10 +5,10 @@ from pathlib import Path
 
 import torch
 
-from ciao.algorithm.builder import build_all_hyperpixels
+from ciao.algorithm.builder import build_all_regions
 from ciao.data.preprocessing import load_and_preprocess_image
 from ciao.model.predictor import ModelPredictor
-from ciao.scoring.hyperpixel import HyperpixelResult
+from ciao.scoring.region import RegionResult
 from ciao.scoring.segments import (
     calculate_segment_scores,
     create_surrogate_dataset,
@@ -18,14 +18,14 @@ from ciao.typing import ExplanationMethodFn, ReplacementFn, SegmentationFn
 
 @dataclass
 class ExplanationResult:
-    """Artifacts, hyperpixels and metadata required to produce visualizations."""
+    """Artifacts, regions and metadata required to produce visualizations."""
 
     input_batch: torch.Tensor
     target_class_idx: int
     class_name: str
     segments: torch.Tensor
     segment_scores: dict[int, float]  # Segment ID -> score
-    hyperpixels: list[HyperpixelResult]
+    regions: list[RegionResult]
 
 
 class CIAOExplainer:
@@ -43,7 +43,7 @@ class CIAOExplainer:
         method: ExplanationMethodFn,
         replacement: ReplacementFn,
         target_class_idx: int | None = None,
-        max_hyperpixels: int = 10,
+        max_regions: int = 10,
         desired_length: int = 30,
         batch_size: int = 64,
     ) -> ExplanationResult:
@@ -56,8 +56,8 @@ class CIAOExplainer:
             method: Explanation method function evaluating search contexts sequentially.
             replacement: Replacement strategy function generating an obfuscation mask.
             target_class_idx: Target class to explain (None = auto-select)
-            max_hyperpixels: Maximum number of hyperpixels to build
-            desired_length: Target number of segments per hyperpixel (default=30)
+            max_regions: Maximum number of regions to build
+            desired_length: Target number of segments per region (default=30)
             batch_size: Batch size for model evaluation
 
         Returns:
@@ -73,8 +73,8 @@ class CIAOExplainer:
                 f"predictor must be a ModelPredictor instance, got {type(predictor).__name__}"
             )
 
-        if max_hyperpixels <= 0:
-            raise ValueError(f"max_hyperpixels must be positive, got {max_hyperpixels}")
+        if max_regions <= 0:
+            raise ValueError(f"max_regions must be positive, got {max_regions}")
         if desired_length <= 0:
             raise ValueError(f"desired_length must be positive, got {desired_length}")
         if batch_size <= 0:
@@ -137,7 +137,7 @@ class CIAOExplainer:
         segment_scores = calculate_segment_scores(X, y)
 
         # 6. Execute the builder loop
-        hyperpixels = build_all_hyperpixels(
+        regions = build_all_regions(
             method=method,
             predictor=predictor,
             input_batch=input_batch,
@@ -145,7 +145,7 @@ class CIAOExplainer:
             image_graph=image_graph,
             target_class_idx=target_class_idx,
             scores=segment_scores,
-            max_hyperpixels=max_hyperpixels,
+            max_regions=max_regions,
             desired_length=desired_length,
             batch_size=batch_size,
         )
@@ -157,6 +157,6 @@ class CIAOExplainer:
             target_class_idx=target_class_idx,
             segments=image_graph.segments,
             segment_scores=segment_scores,
-            hyperpixels=hyperpixels,
+            regions=regions,
             class_name=class_name,
         )

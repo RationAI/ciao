@@ -1,6 +1,6 @@
 # CIAO: Contextual Importance Assessment via Obfuscation
 
-An implementation of explainable AI techniques for image classification. CIAO identifies influential image regions by systematically segmenting images, obfuscating segments, and using search algorithms to find important regions (hyperpixels).
+An implementation of explainable AI techniques for image classification. CIAO identifies influential image regions by systematically segmenting images, obfuscating segments, and using search algorithms to find important regions.
 
 ## Overview
 
@@ -8,7 +8,7 @@ CIAO explains what regions of an image contribute to a neural network's classifi
 
 1. Segments the image into small regions
 2. Obfuscates each segment and measures impact on model predictions
-3. Uses search algorithms to group adjacent important segments into hyperpixels
+3. Uses search algorithms to group adjacent important segments into regions
 4. Generates explanations showing which regions influenced the prediction
 
 ## Quick Start
@@ -60,8 +60,8 @@ uv run python -m ciao
 
 1. **Segmentation**: The input image is divided into small regions (segments) using hexagonal or square grids
 2. **Score Calculation**: Each segment is obfuscated (replaced) and the model is queried to measure how much that segment affects the prediction. This gives an importance score to each segment
-3. **Hyperpixel Search**: A search algorithm finds groups of adjacent segments with high importance scores, creating "hyperpixels" that represent influential image regions
-4. **Explanation**: The top hyperpixels are visualized to show which regions most influenced the model's prediction
+3. **Region Search**: A search algorithm finds groups of adjacent segments with high importance scores, creating "regions" that represent influential image regions
+4. **Explanation**: The top regions are visualized to show which regions most influenced the model's prediction
 
 ### Search Algorithms
 
@@ -90,7 +90,7 @@ uv run python -m ciao
 ciao/
 ├── ciao/                           # Main package
 │   ├── algorithm/                  # Search algorithms and data structures
-│   │   ├── builder.py              # Unified hyperpixel builder orchestrating searches
+│   │   ├── builder.py              # Unified region builder orchestrating searches
 │   │   ├── context.py              # Search context configurations
 │   │   ├── graph.py                # Graph helpers
 │   │   ├── lookahead.py            # Greedy lookahead
@@ -106,7 +106,7 @@ ciao/
 │   │   └── segmentation.py         # Segmentation utilities (hex/square grids)
 │   ├── scoring/                    # Scoring
 │   │   ├── segments.py             # Surrogate dataset creation and segment scoring
-│   │   └── hyperpixel.py           # Hyperpixel evaluation and selection
+│   │   └── region.py               # Region evaluation and selection
 │   ├── explainer/                  # Core explainer implementation
 │   │   ├── ciao_explainer.py       # Main CIAO explainer class
 │   │   └── explanation_methods.py  # Methods for the explanation algorithms
