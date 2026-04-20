@@ -2,7 +2,6 @@ defaults:
   - logger: mlflow
   - data: single_image
   - method: lookahead
-  - metric: pure_score
   - model: resnet50
   - classes: imagenet
   - replacement: mean_color

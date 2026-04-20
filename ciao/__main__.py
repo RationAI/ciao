@@ -64,13 +64,12 @@ def main(cfg: DictConfig) -> None:
                 )
 
                 # Log trajectory for graphs
-                if cfg.get("metric", {}).get("log_trajectory", False):
-                    for item in region.trajectory:
-                        mlflow.log_metric(
-                            f"region_{idx}/trajectory_best_score",
-                            item["best_score"],
-                            step=int(item["evals"]),
-                        )
+                for item in region.trajectory:
+                    mlflow.log_metric(
+                        f"region_{idx}/trajectory_best_score",
+                        item["best_score"],
+                        step=int(item["evals"]),
+                    )
 
             mlflow.log_metric("time_seconds", elapsed)
 

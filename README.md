@@ -127,10 +127,7 @@ ciao/
 │   ├── logger/                     # Experiment tracker settings
 │   │   └── mlflow.yaml
 │   ├── method/                     # Search algorithm configs
-│   │   ├── lookahead.yaml
-│   │   └── mcts.yaml
-│   ├── metric/                     # Metric and logging behaviour
-│   │   └── pure_score.yaml
+│   │   └── lookahead.yaml
 │   ├── model/                      # Model backbone configs
 │   │   └── resnet50.yaml
 │   ├── replacement/                # Obfuscation strategy configs
@@ -139,7 +136,7 @@ ciao/
 │   │   ├── mean_color.yaml
 │   │   └── solid_color.yaml
 │   ├── runs/                       # Experiment run compositions
-│   │   └── exp_efficiency.yaml     # Efficiency experiment (MCTS on pascal_sample)
+│   │   └── batch_example.yaml
 │   └── segmentation/               # Segmentation strategy configs
 │       ├── hexagonal.yaml
 │       └── square.yaml
