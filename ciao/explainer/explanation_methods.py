@@ -33,6 +33,7 @@ def make_mcts_method(
     num_iterations: int = 100,
     exploration_c: float = 1.4,
     virtual_loss: float = 1.0,
+    alpha: float = 0.0,
 ) -> ExplanationMethodFn:
     """Return a function that generates an MCTS-based region building strategy.
 
@@ -40,6 +41,8 @@ def make_mcts_method(
         num_iterations: Number of MCTS iterations (batch collections).
         exploration_c: UCT exploration constant.
         virtual_loss: Multiplier for pending counter in UCT.
+        alpha: Weight on max vs mean in the UCT Q-value,
+            ``Q = alpha * max + (1 - alpha) * mean``. Must be in [0, 1].
 
     Returns:
         ExplanationMethodFn: Method computing contextual importance via MCTS search.
@@ -50,6 +53,8 @@ def make_mcts_method(
         raise ValueError()
     if virtual_loss <= 0:
         raise ValueError()
+    if not 0.0 <= alpha <= 1.0:
+        raise ValueError(f"alpha must be in [0, 1], got {alpha}")
 
     def method(ctx: SearchContext) -> RegionResult:
         """Find the region via Monte Carlo Tree Search."""
@@ -60,6 +65,7 @@ def make_mcts_method(
             num_iterations=num_iterations,
             exploration_c=exploration_c,
             virtual_loss=virtual_loss,
+            alpha=alpha,
         )
 
     return method

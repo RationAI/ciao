@@ -1,5 +1,6 @@
 """Node classes for MCTS search tree."""
 
+import math
 from typing import Optional
 
 
@@ -15,4 +16,5 @@ class MCTSNode:
 
         self.visits = 0
         self.mean_value = 0.0
+        self.max_value = -math.inf
         self.pending = 0  # virtual loss counter
