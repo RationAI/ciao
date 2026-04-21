@@ -50,9 +50,9 @@ def make_mcts_method(
     if num_iterations < 1:
         raise ValueError(f"num_iterations must be >= 1, got {num_iterations}")
     if exploration_c <= 0:
-        raise ValueError()
+        raise ValueError(f"exploration_c must be > 0, got {exploration_c}")
     if virtual_loss <= 0:
-        raise ValueError()
+        raise ValueError(f"virtual_loss must be > 0, got {virtual_loss}")
     if not 0.0 <= alpha <= 1.0:
         raise ValueError(f"alpha must be in [0, 1], got {alpha}")
 
