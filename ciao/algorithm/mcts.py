@@ -224,8 +224,11 @@ def _evaluate_mcts_batch(
     ctx: SearchContext,
     batch_rollout_regions: list[frozenset[int]],
     cached_rewards: list[float | None],
-) -> list[float]:
-    """Phase 2: Batch Evaluation - dedupe uncached regions and merge rewards."""
+) -> tuple[list[float], int]:
+    """Phase 2: Batch Evaluation - dedupe uncached regions and merge rewards.
+
+    Returns the per-path rewards and the number of unique GPU evaluations performed.
+    """
     uncached_regions = [
         batch_rollout_regions[i]
         for i, reward in enumerate(cached_rewards)
@@ -257,7 +260,7 @@ def _evaluate_mcts_batch(
         else:
             batch_rewards.append(region_rewards[batch_rollout_regions[idx]])
 
-    return batch_rewards
+    return batch_rewards, len(unique_regions)
 
 
 def build_region_mcts(
@@ -293,6 +296,9 @@ def build_region_mcts(
     best_region = root.region
     best_score = -float("inf")
 
+    eval_count = 0
+    trajectory: list[dict[str, float]] = []
+
     # --- MAIN MCTS LOOP ---
     for _ in tqdm(range(num_iterations), desc="MCTS", unit="iter"):
         # --- PHASE 1: BATCH COLLECTION ---
@@ -305,11 +311,12 @@ def build_region_mcts(
         )
 
         # --- PHASE 2: BATCH EVALUATION ---
-        batch_rewards = _evaluate_mcts_batch(
+        batch_rewards, batch_eval_count = _evaluate_mcts_batch(
             ctx=ctx,
             batch_rollout_regions=batch_rollout_regions,
             cached_rewards=cached_rewards,
         )
+        eval_count += batch_eval_count
 
         # Update best region if we found a better one
         for i, reward in enumerate(batch_rewards):
@@ -317,9 +324,16 @@ def build_region_mcts(
                 best_score = reward
                 best_region = batch_rollout_regions[i]
 
+        trajectory.append({"evals": eval_count, "best_score": best_score})
+
         # --- PHASE 3: BATCH BACKUP ---
         backup_paths(batch_paths, batch_rewards)
 
     best_score = best_score * ctx.optimization_sign
 
-    return RegionResult(region=best_region, score=best_score)
+    return RegionResult(
+        region=best_region,
+        score=best_score,
+        evaluations_count=eval_count,
+        trajectory=trajectory,
+    )
