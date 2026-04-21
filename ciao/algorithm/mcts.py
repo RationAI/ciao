@@ -8,6 +8,7 @@ Supports:
 - Local UCT normalization across a node's children
 
 Selection details:
+- ``Q(s,a) = alpha * max_value + (1 - alpha) * mean_value``
 - ``Q_eff(s,a) = Q(s,a) - w * V_L * |Q(s,a)|``
 - ``Q_norm`` is local min-max normalization to ``[-1, 1]``
 - ``UCT(s,a) = Q_norm + C * sqrt(ln(N_parent) / n_j)``
@@ -39,6 +40,7 @@ def select_uct_child(
     node: MCTSNode,
     exploration_c: float,
     virtual_loss: float,
+    alpha: float,
 ) -> MCTSNode | None:
     """Select child with highest UCT score using local normalization and FPU."""
     children = list(node.children.values())
@@ -46,12 +48,19 @@ def select_uct_child(
         return None
 
     # for FPU
-    parent_q = node.mean_value if node.visits > 0 else 0.0
+    parent_q = (
+        alpha * node.max_value + (1.0 - alpha) * node.mean_value
+        if node.visits > 0
+        else 0.0
+    )
 
     q_eff_values: list[float] = []
     for child in children:
         # FPU
-        q_value = child.mean_value if child.visits > 0 else parent_q
+        if child.visits > 0:
+            q_value = alpha * child.max_value + (1.0 - alpha) * child.mean_value
+        else:
+            q_value = parent_q
 
         # Apply virtual loss through the pending counter.
         q_eff = q_value - virtual_loss * child.pending * abs(q_value)
@@ -119,6 +128,7 @@ def backup_paths(batch_paths: list[list[MCTSNode]], rewards: list[float]) -> Non
     Updates:
     - visits
     - mean_value (mean backup for selection)
+    - max_value (best reward seen through this node)
     - pending (release virtual loss)
     """
     for path, reward in zip(batch_paths, rewards, strict=True):
@@ -127,6 +137,8 @@ def backup_paths(batch_paths: list[list[MCTSNode]], rewards: list[float]) -> Non
                 node.pending -= 1  # Release virtual loss where it was applied
             node.visits += 1
             node.mean_value += (reward - node.mean_value) / node.visits
+            if reward > node.max_value:
+                node.max_value = reward
 
 
 def _collect_mcts_batch(
@@ -134,6 +146,7 @@ def _collect_mcts_batch(
     root: MCTSNode,
     exploration_c: float,
     virtual_loss: float,
+    alpha: float,
 ) -> tuple[list[list[MCTSNode]], list[frozenset[int]], list[float | None]]:
     """Phase 1: Batch Collection - Selection, Expansion, and Simulation."""
     batch_paths: list[list[MCTSNode]] = []
@@ -152,7 +165,7 @@ def _collect_mcts_batch(
         ) and not is_terminal(
             node.region, ctx.image_graph, ctx.used_segments, ctx.desired_length
         ):
-            child = select_uct_child(node, exploration_c, virtual_loss)
+            child = select_uct_child(node, exploration_c, virtual_loss, alpha)
 
             if child is None:
                 raise RuntimeError(
@@ -252,6 +265,7 @@ def build_region_mcts(
     num_iterations: int,
     exploration_c: float = 1.4,
     virtual_loss: float = 1.0,
+    alpha: float = 0.0,
 ) -> RegionResult:
     """Build a region using Monte Carlo Tree Search.
 
@@ -259,13 +273,15 @@ def build_region_mcts(
     - Batch collection and evaluation
     - Terminal caching to avoid re-evaluation
     - Virtual loss for parallel safety
-    - Mean backup for value estimation
+    - Mean+max backup for value estimation
 
     Args:
         ctx: Search context with model state and parameters
         num_iterations: Number of MCTS iterations (batch collections)
         exploration_c: UCT exploration constant
         virtual_loss: Multiplier for pending counter in UCT
+        alpha: Weight on max vs mean in the UCT Q-value,
+            ``Q = alpha * max + (1 - alpha) * mean``. Must be in [0, 1].
 
     Returns:
         RegionResult with region, score, and stats.
@@ -285,6 +301,7 @@ def build_region_mcts(
             root=root,
             exploration_c=exploration_c,
             virtual_loss=virtual_loss,
+            alpha=alpha,
         )
 
         # --- PHASE 2: BATCH EVALUATION ---
