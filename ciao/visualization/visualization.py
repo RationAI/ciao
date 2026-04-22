@@ -10,13 +10,15 @@ import numpy as np
 import torch
 from matplotlib.figure import Figure
 
+from ciao.data.preprocessing import IMAGENET_MEAN, IMAGENET_STD
+
 
 if TYPE_CHECKING:
     from ciao.explainer.ciao_explainer import ExplanationResult
 
 
-_IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-_IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+_IMAGENET_MEAN = np.asarray(IMAGENET_MEAN, dtype=np.float32)
+_IMAGENET_STD = np.asarray(IMAGENET_STD, dtype=np.float32)
 
 
 def _to_hwc(tensor: torch.Tensor) -> np.ndarray:
