@@ -3,12 +3,8 @@
 import torch
 import torchvision.transforms.functional as TF
 
+from ciao.data.preprocessing import IMAGENET_MEAN, IMAGENET_STD
 from ciao.typing import ReplacementFn
-
-
-# ImageNet normalization constants
-IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406])
-IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225])
 
 
 def calculate_image_mean_color(input_tensor: torch.Tensor) -> torch.Tensor:
@@ -23,8 +19,8 @@ def calculate_image_mean_color(input_tensor: torch.Tensor) -> torch.Tensor:
     device = input_tensor.device
 
     # Move normalization constants to same device
-    imagenet_mean = IMAGENET_MEAN.view(3, 1, 1).to(device)
-    imagenet_std = IMAGENET_STD.view(3, 1, 1).to(device)
+    imagenet_mean = torch.tensor(IMAGENET_MEAN, device=device).view(3, 1, 1)
+    imagenet_std = torch.tensor(IMAGENET_STD, device=device).view(3, 1, 1)
 
     # Unnormalize, calculate mean, then re-normalize
     unnormalized = (input_tensor * imagenet_std) + imagenet_mean
@@ -136,8 +132,8 @@ def make_solid_color_replacement(
 
         normalized_color = color_tensor / 255.0
 
-        imagenet_mean = IMAGENET_MEAN.view(3, 1, 1).to(image.device)
-        imagenet_std = IMAGENET_STD.view(3, 1, 1).to(image.device)
+        imagenet_mean = torch.tensor(IMAGENET_MEAN, device=image.device).view(3, 1, 1)
+        imagenet_std = torch.tensor(IMAGENET_STD, device=image.device).view(3, 1, 1)
 
         normalized_color = (normalized_color - imagenet_mean) / imagenet_std
         return normalized_color.expand(-1, height, width)
