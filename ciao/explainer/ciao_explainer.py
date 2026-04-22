@@ -26,6 +26,7 @@ class ExplanationResult:
     segments: torch.Tensor
     segment_scores: dict[int, float]  # Segment ID -> score
     regions: list[RegionResult]
+    replacement_image: torch.Tensor
 
 
 class CIAOExplainer:
@@ -159,4 +160,5 @@ class CIAOExplainer:
             segment_scores=segment_scores,
             regions=regions,
             class_name=class_name,
+            replacement_image=replacement_image,
         )
