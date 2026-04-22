@@ -80,6 +80,13 @@ def main(cfg: DictConfig) -> None:
 
                 elapsed = time.perf_counter() - start_time
 
+                mlflow.log_params(
+                    {
+                        "target_class_idx": results.target_class_idx,
+                        "class_name": results.class_name,
+                    }
+                )
+
                 # Log per-region summary metrics
                 for idx, region in enumerate(results.regions):
                     mlflow.log_metrics(
