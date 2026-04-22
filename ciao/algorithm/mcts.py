@@ -182,6 +182,7 @@ def _collect_mcts_batch(
         ):
             child = expand_node(node, ctx.image_graph, ctx.used_segments)
 
+            # won't happen, the node is not terminal and thus has at least one child
             if child is not None:
                 child.pending += 1
                 node = child
@@ -266,9 +267,9 @@ def _evaluate_mcts_batch(
 def build_region_mcts(
     ctx: SearchContext,
     num_iterations: int,
-    exploration_c: float = 1.4,
-    virtual_loss: float = 1.0,
-    alpha: float = 0.0,
+    exploration_c: float,
+    virtual_loss: float,
+    alpha: float,
 ) -> RegionResult:
     """Build a region using Monte Carlo Tree Search.
 
@@ -299,6 +300,13 @@ def build_region_mcts(
     eval_count = 0
     trajectory: list[dict[str, float]] = []
 
+    # DEBUG counters (remove after verifying)
+    dbg_max_depth = 0
+    dbg_terminal_selected = 0
+    dbg_cache_hits = 0
+    dbg_dedupe_savings = 0
+    dbg_batches_with_dedupe = 0
+
     # --- MAIN MCTS LOOP ---
     for _ in tqdm(range(num_iterations), desc="MCTS", unit="iter"):
         # --- PHASE 1: BATCH COLLECTION ---
@@ -310,6 +318,22 @@ def build_region_mcts(
             alpha=alpha,
         )
 
+        # DEBUG: inspect tree depth and terminal arrivals for this batch
+        for path in batch_paths:
+            final_node = path[-1]
+            depth = len(final_node.region)
+            if depth > dbg_max_depth:
+                dbg_max_depth = depth
+            if is_terminal(
+                final_node.region,
+                ctx.image_graph,
+                ctx.used_segments,
+                ctx.desired_length,
+            ):
+                dbg_terminal_selected += 1
+        cache_hits_this_batch = sum(1 for r in cached_rewards if r is not None)
+        dbg_cache_hits += cache_hits_this_batch
+
         # --- PHASE 2: BATCH EVALUATION ---
         batch_rewards, batch_eval_count = _evaluate_mcts_batch(
             ctx=ctx,
@@ -317,6 +341,13 @@ def build_region_mcts(
             cached_rewards=cached_rewards,
         )
         eval_count += batch_eval_count
+
+        # DEBUG: did within-batch dedupe fire?
+        uncached_count = len(cached_rewards) - cache_hits_this_batch
+        savings = uncached_count - batch_eval_count
+        if savings > 0:
+            dbg_dedupe_savings += savings
+            dbg_batches_with_dedupe += 1
 
         # Update best region if we found a better one
         for i, reward in enumerate(batch_rewards):
@@ -330,6 +361,24 @@ def build_region_mcts(
         backup_paths(batch_paths, batch_rewards)
 
     best_score = best_score * ctx.optimization_sign
+
+    total_rollouts = num_iterations * ctx.batch_size
+    print(
+        f"[MCTS DEBUG] iters={num_iterations} batch={ctx.batch_size} "
+        f"rollouts={total_rollouts} eval_count={eval_count}"
+    )
+    print(
+        f"[MCTS DEBUG] max_tree_depth={dbg_max_depth} "
+        f"(desired_length={ctx.desired_length})"
+    )
+    print(
+        f"[MCTS DEBUG] terminal_reached_by_selection={dbg_terminal_selected} "
+        f"cache_hits={dbg_cache_hits}"
+    )
+    print(
+        f"[MCTS DEBUG] within_batch_dedupe_savings={dbg_dedupe_savings} "
+        f"across {dbg_batches_with_dedupe} batches"
+    )
 
     return RegionResult(
         region=best_region,
