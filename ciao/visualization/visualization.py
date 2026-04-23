@@ -23,7 +23,7 @@ _IMAGENET_STD = np.asarray(IMAGENET_STD, dtype=np.float32)
 
 def _to_hwc(tensor: torch.Tensor) -> np.ndarray:
     """Denormalize an image tensor to a displayable float32 [H, W, 3] array."""
-    img = tensor.squeeze(0).cpu().float().numpy().transpose(1, 2, 0)
+    img = tensor.detach().squeeze(0).cpu().float().numpy().transpose(1, 2, 0)
     return np.clip(img * _IMAGENET_STD + _IMAGENET_MEAN, 0.0, 1.0)
 
 
@@ -43,7 +43,7 @@ def _region_mask(segments: np.ndarray, region: frozenset[int]) -> np.ndarray:
 
 
 def plot_overview(result: ExplanationResult) -> Figure:
-    """Side-by-side: segmentation | segment-score heatmap | replacement image."""
+    """Side-by-side: original | segmentation | segment-score heatmap | replacement image."""
     img = _to_hwc(result.input_batch)
     segs = result.segments.cpu().numpy()
     repl = _to_hwc(result.replacement_image.unsqueeze(0))
