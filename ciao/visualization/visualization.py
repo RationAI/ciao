@@ -57,20 +57,24 @@ def plot_overview(result: ExplanationResult) -> Figure:
         score_map[segs == seg_id] = score
     abs_max = float(np.abs(score_map).max()) or 1.0
 
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    fig, axes = plt.subplots(1, 4, figsize=(20, 5))
 
-    axes[0].imshow(seg_overlay)
-    axes[0].set_title("segmentation")
+    axes[0].imshow(img)
+    axes[0].set_title("original")
     axes[0].axis("off")
 
-    axes[1].imshow(img)
-    axes[1].imshow(score_map, cmap="RdBu_r", vmin=-abs_max, vmax=abs_max, alpha=0.55)
-    axes[1].set_title("segment scores")
+    axes[1].imshow(seg_overlay)
+    axes[1].set_title("segmentation")
     axes[1].axis("off")
 
-    axes[2].imshow(repl)
-    axes[2].set_title("replacement")
+    axes[2].imshow(img)
+    axes[2].imshow(score_map, cmap="RdBu_r", vmin=-abs_max, vmax=abs_max, alpha=0.55)
+    axes[2].set_title("segment scores")
     axes[2].axis("off")
+
+    axes[3].imshow(repl)
+    axes[3].set_title("replacement")
+    axes[3].axis("off")
 
     fig.tight_layout(pad=0.5)
     return fig
