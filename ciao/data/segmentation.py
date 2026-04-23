@@ -73,6 +73,8 @@ def _build_pixel_adjacency_list(segments: torch.Tensor) -> list[frozenset[int]]:
     edges_v = torch.column_stack([top[mask_v], bottom[mask_v]])
 
     all_edges = torch.vstack([edges_h, edges_v])
+    all_edges, _ = torch.sort(all_edges, dim=1)
+    all_edges = torch.unique(all_edges, dim=0)
     for edge in all_edges:
         seg1, seg2 = edge[0].item(), edge[1].item()
         adjacency_sets[seg1].add(seg2)
@@ -135,7 +137,7 @@ def _create_hexagonal_grid(
     """Create a grid of hexagons with adjacency list using vectorized operations.
 
     Uses axial coordinate system for precise hexagonal tiling (flat-top orientation).
-    Each hexagon has exactly 6 neighbors.
+    Each interior hexagon has 6 neighbors; boundary hexagons have fewer.
 
     Args:
         input_tensor: Input image tensor [C, H, W]
@@ -218,7 +220,7 @@ def _create_slic_segments(
     """Run SLIC on a (ImageNet-normalized) image tensor and build an ImageGraph."""
     mean = np.asarray(IMAGENET_MEAN, dtype=np.float32)
     std = np.asarray(IMAGENET_STD, dtype=np.float32)
-    img = input_tensor.cpu().float().numpy().transpose(1, 2, 0)
+    img = input_tensor.detach().cpu().float().numpy().transpose(1, 2, 0)
     img = np.clip(img * std + mean, 0.0, 1.0)
 
     labels = slic(
