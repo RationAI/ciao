@@ -30,6 +30,10 @@ def build_region_potential(
     # Cache actual scores across all steps to avoid duplicate evaluations
     evaluated_scores: dict[frozenset[int], float] = {}
 
+    eval_count = 0
+    trajectory: list[dict[str, float]] = []
+    best_signed = -float("inf")
+
     # Main loop: Grow region until target length
     while len(curr_region) < ctx.desired_length:
         # Compute expansion frontier
@@ -39,7 +43,7 @@ def build_region_potential(
             break
 
         # Phase 1: Sampling - Monte Carlo exploration from each frontier node
-        potentials = sampling_phase(
+        potentials, new_evals = sampling_phase(
             curr_region=curr_region,
             current_frontier=current_frontier,
             num_simulations=num_simulations,
@@ -47,6 +51,15 @@ def build_region_potential(
             used_segments=used_segments,
             evaluated_scores=evaluated_scores,
         )
+        eval_count += new_evals
+
+        if evaluated_scores:
+            step_best = max(
+                s * ctx.optimization_sign for s in evaluated_scores.values()
+            )
+            if step_best > best_signed:
+                best_signed = step_best
+            trajectory.append({"evals": eval_count, "best_score": best_signed})
 
         # Phase 2: Selection - Choose best frontier node by potential
         valid_nodes = [n for n in potentials if potentials[n]]
@@ -70,8 +83,18 @@ def build_region_potential(
             target_class_idx=ctx.target_class_idx,
             batch_size=ctx.batch_size,
         )[0]
+        eval_count += 1
+        signed_final = final_score * ctx.optimization_sign
+        if signed_final > best_signed:
+            best_signed = signed_final
+        trajectory.append({"evals": eval_count, "best_score": best_signed})
 
-    return RegionResult(region=curr_region, score=final_score)
+    return RegionResult(
+        region=curr_region,
+        score=final_score,
+        evaluations_count=eval_count,
+        trajectory=trajectory,
+    )
 
 
 def sampling_phase(
@@ -81,7 +104,7 @@ def sampling_phase(
     ctx: SearchContext,
     used_segments: Set[int],
     evaluated_scores: dict[frozenset[int], float],
-) -> dict[int, list[float]]:
+) -> tuple[dict[int, list[float]], int]:
     """Monte Carlo Sampling Phase: Explore expansions and populate potential cache.
 
     For each frontier node n:
@@ -100,7 +123,8 @@ def sampling_phase(
         evaluated_scores: Global cache of previously evaluated regions to their scores
 
     Returns:
-        Mapping from frontier node ID to a list of evaluated scores for expansions containing that node.
+        Tuple of (mapping from frontier node ID to a list of evaluated scores
+        for expansions containing that node, number of new NN evaluations performed).
     """
     regions_to_evaluate: list[frozenset[int]] = []
     # Maps expansion_region -> which frontier nodes it contains
@@ -130,7 +154,7 @@ def sampling_phase(
                 regions_to_evaluate.append(sampled_region)
 
     if not region_to_frontier_hits:
-        return {}
+        return {}, 0
 
     # --- Batch Evaluation: Score all unique expansions ---
     if regions_to_evaluate:
@@ -157,4 +181,4 @@ def sampling_phase(
         for neighbor_id in hits:
             potentials.setdefault(neighbor_id, []).append(signed_score)
 
-    return potentials
+    return potentials, len(regions_to_evaluate)
