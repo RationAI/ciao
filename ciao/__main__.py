@@ -39,6 +39,7 @@ def main(cfg: DictConfig) -> None:
     with mlflow.start_run(run_name=cfg.logger.run_name):
         params = _flatten_params(OmegaConf.to_container(cfg, resolve=True))
         mlflow.log_params(params)
+        params.pop("target_class_idx", None)
 
         segmentation = instantiate(cfg.segmentation)
         method = instantiate(cfg.method)
