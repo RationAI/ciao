@@ -44,9 +44,20 @@ def build_region_pure_monte_carlo(
         batch_size=ctx.batch_size,
     )
 
-    best_idx = max(
-        range(len(scores)),
-        key=lambda idx: scores[idx] * ctx.optimization_sign,
-    )
+    signed_scores = [s * ctx.optimization_sign for s in scores]
 
-    return RegionResult(region=unique_regions[best_idx], score=scores[best_idx])
+    best_signed = -float("inf")
+    trajectory: list[dict[str, float]] = []
+    for idx, signed in enumerate(signed_scores, start=1):
+        if signed > best_signed:
+            best_signed = signed
+        trajectory.append({"evals": idx, "best_score": best_signed})
+
+    best_idx = max(range(len(signed_scores)), key=lambda i: signed_scores[i])
+
+    return RegionResult(
+        region=unique_regions[best_idx],
+        score=scores[best_idx],
+        evaluations_count=len(unique_regions),
+        trajectory=trajectory,
+    )
