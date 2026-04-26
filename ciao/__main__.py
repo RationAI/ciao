@@ -101,7 +101,18 @@ def _log_explanation_results(
                 f"region_{idx}/masked_prob": region.masked_prob,
                 f"region_{idx}/probability_drop": region.probability_drop,
                 f"region_{idx}/evaluations_count": region.evaluations_count,
+                f"region_{idx}/masked_top_prob": region.masked_top_prob,
             }
+        )
+        mlflow.log_params(
+            {
+                f"region_{idx}/masked_top_class_idx": region.masked_top_class_idx,
+                f"region_{idx}/masked_top_class_name": region.masked_top_class_name,
+            }
+        )
+        mlflow.log_dict(
+            {"segments": sorted(region.region)},
+            f"region_{idx}/segments.json",
         )
 
     _log_trajectory(run_id, results)
@@ -130,7 +141,8 @@ def _print_summary(
         f"best: score={best.score:.4f}, "
         f"prob {best.original_prob:.4f} -> {best.masked_prob:.4f} "
         f"(drop={best.probability_drop:.4f}), "
-        f"size={len(best.region)} segs, evals={best.evaluations_count} | "
+        f"size={len(best.region)} segs, evals={best.evaluations_count}, "
+        f"shift->{best.masked_top_class_name} ({best.masked_top_prob:.4f}) | "
         f"total_evals={total_evals} | time={elapsed:.1f}s"
     )
 

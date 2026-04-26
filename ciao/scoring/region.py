@@ -20,6 +20,11 @@ class RegionResult:
     evaluations_count: int = 0
     trajectory: list[dict[str, float]] = field(default_factory=list)
 
+    # Top class on the input with this region masked out (populated after search completes)
+    masked_top_class_idx: int = 0
+    masked_top_class_name: str = ""
+    masked_top_prob: float = 0.0
+
 
 def _prepare_tensors_for_model(
     predictor: ModelPredictor,
@@ -170,19 +175,30 @@ def calculate_region_probability_drops(
 
     region_sets = [r.region for r in results]
     masked_probs: list[float] = []
+    top_class_idxs: list[int] = []
+    top_class_probs: list[float] = []
 
     for batch_start in range(0, len(region_sets), batch_size):
         batch_end = min(batch_start + batch_size, len(region_sets))
         slice_ = region_sets[batch_start:batch_end]
         mask_tensor = _build_mask_tensor(gpu_segments, slice_, predictor.device)
         masked_input = _apply_masks(input_batch, mask_tensor, replacement_image)
-        probs = predictor.get_predictions(masked_input)[:, target_class_idx]
-        masked_probs.extend(probs.tolist())
+        probs = predictor.get_predictions(masked_input)
+        masked_probs.extend(probs[:, target_class_idx].tolist())
+        top_probs, top_idxs = probs.max(dim=1)
+        top_class_probs.extend(top_probs.tolist())
+        top_class_idxs.extend(top_idxs.tolist())
 
-    for result, masked_prob in zip(results, masked_probs, strict=True):
+    class_names = predictor.class_names
+    for result, masked_prob, top_idx, top_prob in zip(
+        results, masked_probs, top_class_idxs, top_class_probs, strict=True
+    ):
         result.original_prob = original_prob
         result.masked_prob = masked_prob
         result.probability_drop = original_prob - masked_prob
+        result.masked_top_class_idx = int(top_idx)
+        result.masked_top_class_name = class_names[int(top_idx)]
+        result.masked_top_prob = float(top_prob)
 
     return results
 
