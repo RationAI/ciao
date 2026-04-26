@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from matplotlib.figure import Figure
 
-from ciao.data.preprocessing import IMAGENET_MEAN, IMAGENET_STD
+from ciao.data.constants import IMAGENET_MEAN, IMAGENET_STD
 
 
 if TYPE_CHECKING:
