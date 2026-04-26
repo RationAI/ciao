@@ -1,5 +1,6 @@
 import time
 from contextlib import nullcontext
+from pathlib import Path
 
 import hydra
 import mlflow
@@ -9,8 +10,9 @@ from mlflow.entities import Metric
 from omegaconf import DictConfig, OmegaConf
 
 from ciao.data.loader import iter_image_paths
-from ciao.explainer.ciao_explainer import CIAOExplainer
+from ciao.explainer.ciao_explainer import CIAOExplainer, ExplanationResult
 from ciao.model.predictor import ModelPredictor
+from ciao.typing import ExplanationMethodFn, ReplacementFn, SegmentationFn
 
 
 MLFLOW_LOG_BATCH_LIMIT = 1000
@@ -31,6 +33,108 @@ def _flatten_params(obj: object, parent_key: str = "") -> dict[str, object]:
     return items
 
 
+def _build_pipeline(
+    cfg: DictConfig,
+) -> tuple[
+    SegmentationFn,
+    ExplanationMethodFn,
+    ReplacementFn,
+    ModelPredictor,
+    CIAOExplainer,
+]:
+    """Instantiate explanation components from the Hydra config."""
+    segmentation = instantiate(cfg.segmentation)
+    method = instantiate(cfg.method)
+    replacement = instantiate(cfg.replacement)
+
+    model = instantiate(cfg.model)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+
+    class_names = instantiate(cfg.classes)
+    predictor = ModelPredictor(model=model, class_names=class_names)
+
+    explainer = CIAOExplainer()
+    return segmentation, method, replacement, predictor, explainer
+
+
+def _log_trajectory(run_id: str, results: ExplanationResult) -> None:
+    """Batch-log per-region trajectory points to MLflow."""
+    ts_ms = int(time.time() * 1000)
+    trajectory_metrics = [
+        Metric(
+            key=f"region_{idx}/trajectory_best_score",
+            value=item["best_score"],
+            timestamp=ts_ms,
+            step=int(item["evals"]),
+        )
+        for idx, region in enumerate(results.regions)
+        for item in region.trajectory
+    ]
+    if not trajectory_metrics:
+        return
+
+    client = mlflow.MlflowClient()
+    for start in range(0, len(trajectory_metrics), MLFLOW_LOG_BATCH_LIMIT):
+        client.log_batch(
+            run_id=run_id,
+            metrics=trajectory_metrics[start : start + MLFLOW_LOG_BATCH_LIMIT],
+        )
+
+
+def _log_explanation_results(
+    run_id: str, results: ExplanationResult, elapsed: float
+) -> None:
+    """Log explanation params, per-region metrics, trajectory, and timing to MLflow."""
+    mlflow.log_params(
+        {
+            "target_class_idx": results.target_class_idx,
+            "class_name": results.class_name,
+        }
+    )
+
+    for idx, region in enumerate(results.regions):
+        mlflow.log_metrics(
+            {
+                f"region_{idx}/final_score": region.score,
+                f"region_{idx}/original_prob": region.original_prob,
+                f"region_{idx}/masked_prob": region.masked_prob,
+                f"region_{idx}/probability_drop": region.probability_drop,
+                f"region_{idx}/evaluations_count": region.evaluations_count,
+            }
+        )
+
+    _log_trajectory(run_id, results)
+
+    mlflow.log_metric("time_seconds", elapsed)
+
+
+def _print_summary(
+    image_path: Path, results: ExplanationResult, elapsed: float
+) -> None:
+    """Print a one-line summary of the explanation outcome for an image."""
+    if not results.regions:
+        print(
+            f"Done: {image_path.name} | "
+            f"class={results.class_name} (idx={results.target_class_idx}) | "
+            f"no regions found | time={elapsed:.1f}s"
+        )
+        return
+
+    best = results.regions[0]
+    total_evals = sum(r.evaluations_count for r in results.regions)
+    print(
+        f"Done: {image_path.name} | "
+        f"class={results.class_name} (idx={results.target_class_idx}) | "
+        f"regions={len(results.regions)} | "
+        f"best: score={best.score:.4f}, "
+        f"prob {best.original_prob:.4f} -> {best.masked_prob:.4f} "
+        f"(drop={best.probability_drop:.4f}), "
+        f"size={len(best.region)} segs, evals={best.evaluations_count} | "
+        f"total_evals={total_evals} | time={elapsed:.1f}s"
+    )
+
+
 @hydra.main(version_base=None, config_path="../configs", config_name="base")
 def main(cfg: DictConfig) -> None:
     mlflow.set_tracking_uri(cfg.logger.tracking_uri)
@@ -41,18 +145,7 @@ def main(cfg: DictConfig) -> None:
         params.pop("target_class_idx", None)
         mlflow.log_params(params)
 
-        segmentation = instantiate(cfg.segmentation)
-        method = instantiate(cfg.method)
-        replacement = instantiate(cfg.replacement)
-
-        model = instantiate(cfg.model)
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = model.to(device)
-
-        class_names = instantiate(cfg.classes)
-        predictor = ModelPredictor(model=model, class_names=class_names)
-
-        explainer = CIAOExplainer()
+        segmentation, method, replacement, predictor, explainer = _build_pipeline(cfg)
 
         batch_mode = cfg.data.get("batch_path") is not None
 
@@ -81,65 +174,8 @@ def main(cfg: DictConfig) -> None:
 
                 elapsed = time.perf_counter() - start_time
 
-                mlflow.log_params(
-                    {
-                        "target_class_idx": results.target_class_idx,
-                        "class_name": results.class_name,
-                    }
-                )
-
-                # Log per-region summary metrics
-                for idx, region in enumerate(results.regions):
-                    mlflow.log_metrics(
-                        {
-                            f"region_{idx}/final_score": region.score,
-                            f"region_{idx}/original_prob": region.original_prob,
-                            f"region_{idx}/masked_prob": region.masked_prob,
-                            f"region_{idx}/probability_drop": region.probability_drop,
-                            f"region_{idx}/evaluations_count": region.evaluations_count,
-                        }
-                    )
-
-                # Batch-log trajectory points for graphs
-                ts_ms = int(time.time() * 1000)
-                trajectory_metrics = [
-                    Metric(
-                        key=f"region_{idx}/trajectory_best_score",
-                        value=item["best_score"],
-                        timestamp=ts_ms,
-                        step=int(item["evals"]),
-                    )
-                    for idx, region in enumerate(results.regions)
-                    for item in region.trajectory
-                ]
-                if trajectory_metrics:
-                    client = mlflow.MlflowClient()
-                    for start in range(
-                        0, len(trajectory_metrics), MLFLOW_LOG_BATCH_LIMIT
-                    ):
-                        client.log_batch(
-                            run_id=run.info.run_id,
-                            metrics=trajectory_metrics[
-                                start : start + MLFLOW_LOG_BATCH_LIMIT
-                            ],
-                        )
-
-                mlflow.log_metric("time_seconds", elapsed)
-
-                if not results.regions:
-                    print(
-                        f"Done: {image_path.name} | no regions found | time={elapsed:.1f}s"
-                    )
-                    continue
-
-                best_region = results.regions[0]
-                print(
-                    f"Done: {image_path.name} | "
-                    f"score={best_region.score:.4f} | "
-                    f"prob_drop={best_region.probability_drop:.4f} | "
-                    f"evals={best_region.evaluations_count} | "
-                    f"time={elapsed:.1f}s"
-                )
+                _log_explanation_results(run.info.run_id, results, elapsed)
+                _print_summary(image_path, results, elapsed)
 
 
 if __name__ == "__main__":
