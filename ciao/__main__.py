@@ -27,7 +27,7 @@ def _flatten_params(obj: object, parent_key: str = "") -> dict[str, object]:
             items.update(_flatten_params(v, new_key))
     elif isinstance(obj, list):
         for i, v in enumerate(obj):
-            items.update(_flatten_params(v, f"{parent_key}[{i}]"))
+            items.update(_flatten_params(v, f"{parent_key}.{i}"))
     else:
         items[parent_key] = obj
     return items
