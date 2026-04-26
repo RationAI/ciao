@@ -1,15 +1,13 @@
 """Monte Carlo Tree Search for connected image regions.
 
 Supports:
-- Batch collection and evaluation for GPU efficiency
-- Virtual loss for parallel safety (via ``pending`` counters)
+- Leaf parallelization: ``num_rollouts`` random rollouts per selected leaf
 - Terminal caching to avoid re-evaluating visited states
-- Mean backup for value estimation
+- Mean+max backup for value estimation
 - Local UCT normalization across a node's children
 
 Selection details:
 - ``Q(s,a) = alpha * max_value + (1 - alpha) * mean_value``
-- ``Q_eff(s,a) = Q(s,a) - w * V_L * |Q(s,a)|``
 - ``Q_norm`` is local min-max normalization to ``[-1, 1]``
 - ``UCT(s,a) = Q_norm + C * sqrt(ln(N_parent) / n_j)``
 
@@ -39,49 +37,24 @@ def is_fully_expanded(
 def select_uct_child(
     node: MCTSNode,
     exploration_c: float,
-    virtual_loss: float,
     alpha: float,
-) -> MCTSNode | None:
-    """Select child with highest UCT score using local normalization and FPU."""
+) -> MCTSNode:
+    """Select child with highest UCT score using local normalization."""
     children = list(node.children.values())
-    if not children:
-        return None
-
-    # for FPU
-    parent_q = (
-        alpha * node.max_value + (1.0 - alpha) * node.mean_value
-        if node.visits > 0
-        else 0.0
-    )
-
-    q_eff_values: list[float] = []
-    for child in children:
-        # FPU
-        if child.visits > 0:
-            q_value = alpha * child.max_value + (1.0 - alpha) * child.mean_value
-        else:
-            q_value = parent_q
-
-        # Apply virtual loss through the pending counter.
-        q_eff = q_value - virtual_loss * child.pending * abs(q_value)
-        q_eff_values.append(q_eff)
-
-    parent_n = node.visits + node.pending
-
-    min_q_eff = min(q_eff_values)
-    max_q_eff = max(q_eff_values)
+    q_values = [alpha * c.max_value + (1.0 - alpha) * c.mean_value for c in children]
+    min_q = min(q_values)
+    max_q = max(q_values)
 
     best_uct = -float("inf")
-    best_child = None
+    best_child = children[0]
 
-    for child, q_eff in zip(children, q_eff_values, strict=True):
-        if max_q_eff > min_q_eff:
-            q_norm = (2.0 * (q_eff - min_q_eff) / (max_q_eff - min_q_eff)) - 1.0
+    for child, q_value in zip(children, q_values, strict=True):
+        if max_q > min_q:
+            q_norm = (2.0 * (q_value - min_q) / (max_q - min_q)) - 1.0
         else:
             q_norm = 1.0
 
-        child_n = child.visits + child.pending
-        explore = exploration_c * math.sqrt(math.log(parent_n) / child_n)
+        explore = exploration_c * math.sqrt(math.log(node.visits) / child.visits)
         score = q_norm + explore
 
         if score > best_uct:
@@ -112,7 +85,6 @@ def expand_node(
     if not unexpanded:
         return None
 
-    # Create one new child
     seg_id = random.choice(unexpanded)
     child_region = node.region | frozenset({seg_id})
 
@@ -122,175 +94,112 @@ def expand_node(
     return child
 
 
-def backup_paths(batch_paths: list[list[MCTSNode]], rewards: list[float]) -> None:
-    """Backup rewards using standard statistics.
+def backup_path(path: list[MCTSNode], rewards: list[float]) -> None:
+    """Backup multiple rewards along a single path.
 
-    Updates:
-    - visits
-    - mean_value (mean backup for selection)
-    - max_value (best reward seen through this node)
-    - pending (release virtual loss)
+    Each reward contributes one visit to every node on the path.
     """
-    for path, reward in zip(batch_paths, rewards, strict=True):
-        for node in path:
-            if node.pending > 0:
-                node.pending -= 1  # Release virtual loss where it was applied
-            node.visits += 1
-            node.mean_value += (reward - node.mean_value) / node.visits
-            if reward > node.max_value:
-                node.max_value = reward
+    k = len(rewards)
+    sum_rewards = sum(rewards)
+    max_reward = max(rewards)
+    for node in path:
+        new_visits = node.visits + k
+        node.mean_value = (node.mean_value * node.visits + sum_rewards) / new_visits
+        node.visits = new_visits
+        if max_reward > node.max_value:
+            node.max_value = max_reward
 
 
-def _collect_mcts_batch(
+def simulate_leaf(
     ctx: SearchContext,
-    root: MCTSNode,
-    exploration_c: float,
-    virtual_loss: float,
-    alpha: float,
-) -> tuple[list[list[MCTSNode]], list[frozenset[int]], list[float | None]]:
-    """Phase 1: Batch Collection - Selection, Expansion, and Simulation."""
-    batch_paths: list[list[MCTSNode]] = []
-    batch_rollout_regions: list[frozenset[int]] = []
-    cached_rewards: list[float | None] = []  # Store cached values for visited terminals
+    leaf: MCTSNode,
+    num_rollouts: int,
+) -> tuple[list[float], list[frozenset[int]], int]:
+    """Run ``num_rollouts`` simulations from ``leaf`` and return rewards.
 
-    for _ in range(ctx.batch_size):
-        # --- SELECTION ---
-        node = root
-        node.pending += 1  # Count in-flight rollout starting at the root.
-        path = [node]
+    Terminal leaves are deterministic, so a single GPU evaluation (or cached
+    value) is reused for all ``num_rollouts``. Non-terminal leaves sample
+    independent random rollouts and dedupe before GPU evaluation.
 
-        # Standard selection using mean-value UCT
-        while is_fully_expanded(
-            node, ctx.image_graph, ctx.used_segments
-        ) and not is_terminal(
-            node.region, ctx.image_graph, ctx.used_segments, ctx.desired_length
-        ):
-            child = select_uct_child(node, exploration_c, virtual_loss, alpha)
+    Returns rewards (already signed), the rollout regions per reward, and the
+    number of GPU evaluations performed.
+    """
+    leaf_is_terminal = is_terminal(
+        leaf.region, ctx.image_graph, ctx.used_segments, ctx.desired_length
+    )
 
-            if child is None:
-                raise RuntimeError(
-                    "Selection failed to find a child, but node is fully expanded."
-                )
-
-            child.pending += 1
-            node = child
-            path.append(node)
-
-        # --- EXPANSION ---
-        if not is_terminal(
-            node.region, ctx.image_graph, ctx.used_segments, ctx.desired_length
-        ):
-            child = expand_node(node, ctx.image_graph, ctx.used_segments)
-
-            # won't happen, the node is not terminal and thus has at least one child
-            if child is not None:
-                child.pending += 1
-                node = child
-                path.append(node)
-
-        # --- SIMULATION (or cache lookup) ---
-        # Check terminal cache
-        if (
-            is_terminal(
-                node.region, ctx.image_graph, ctx.used_segments, ctx.desired_length
+    if leaf_is_terminal:
+        if leaf.visits > 0:
+            reward = leaf.mean_value  # already signed in prior backup
+            evals = 0
+        else:
+            raw = calculate_region_deltas(
+                predictor=ctx.predictor,
+                input_batch=ctx.input_batch,
+                segments=ctx.image_graph.segments,
+                replacement_image=ctx.replacement_image,
+                segment_sets=[leaf.region],
+                target_class_idx=ctx.target_class_idx,
+                batch_size=ctx.batch_size,
             )
-            and node.visits > 0
-        ):
-            # Reuse cached value - no GPU evaluation needed
-            rollout_region = node.region
-            cached_rewards.append(node.mean_value)
-        else:
-            # Need GPU evaluation
-            if is_terminal(
-                node.region, ctx.image_graph, ctx.used_segments, ctx.desired_length
-            ):
-                rollout_region = node.region
-            else:
-                # Random rollout
-                rollout_region = ctx.image_graph.sample_connected_superset(
-                    base_region=node.region,
-                    target_length=ctx.desired_length,
-                    used_segments=ctx.used_segments,
-                )
+            reward = raw[0] * ctx.optimization_sign
+            evals = 1
+        rewards = [reward] * num_rollouts
+        regions = [leaf.region] * num_rollouts
+        return rewards, regions, evals
 
-            cached_rewards.append(None)
-
-        batch_paths.append(path)
-        batch_rollout_regions.append(rollout_region)
-
-    return batch_paths, batch_rollout_regions, cached_rewards
-
-
-def _evaluate_mcts_batch(
-    ctx: SearchContext,
-    batch_rollout_regions: list[frozenset[int]],
-    cached_rewards: list[float | None],
-) -> tuple[list[float], int]:
-    """Phase 2: Batch Evaluation - dedupe uncached regions and merge rewards.
-
-    Returns the per-path rewards and the number of unique GPU evaluations performed.
-    """
-    uncached_regions = [
-        batch_rollout_regions[i]
-        for i, reward in enumerate(cached_rewards)
-        if reward is None
-    ]
-    unique_regions = list(dict.fromkeys(uncached_regions))
-
-    region_rewards: dict[frozenset[int], float] = {}
-    if unique_regions:
-        raw_rewards = calculate_region_deltas(
-            predictor=ctx.predictor,
-            input_batch=ctx.input_batch,
-            segments=ctx.image_graph.segments,
-            replacement_image=ctx.replacement_image,
-            segment_sets=unique_regions,
-            target_class_idx=ctx.target_class_idx,
-            batch_size=ctx.batch_size,
+    rollout_regions = [
+        ctx.image_graph.sample_connected_superset(
+            base_region=leaf.region,
+            target_length=ctx.desired_length,
+            used_segments=ctx.used_segments,
         )
-        region_rewards = {
-            region: reward * ctx.optimization_sign
-            for region, reward in zip(unique_regions, raw_rewards, strict=True)
-        }
-
-    # Merge GPU results with cached values (cached values are already signed)
-    batch_rewards: list[float] = []
-    for idx, cached_val in enumerate(cached_rewards):
-        if cached_val is not None:
-            batch_rewards.append(cached_val)
-        else:
-            batch_rewards.append(region_rewards[batch_rollout_regions[idx]])
-
-    return batch_rewards, len(unique_regions)
+        for _ in range(num_rollouts)
+    ]
+    unique_regions = list(dict.fromkeys(rollout_regions))
+    raw_rewards = calculate_region_deltas(
+        predictor=ctx.predictor,
+        input_batch=ctx.input_batch,
+        segments=ctx.image_graph.segments,
+        replacement_image=ctx.replacement_image,
+        segment_sets=unique_regions,
+        target_class_idx=ctx.target_class_idx,
+        batch_size=ctx.batch_size,
+    )
+    region_to_reward = {
+        region: reward * ctx.optimization_sign
+        for region, reward in zip(unique_regions, raw_rewards, strict=True)
+    }
+    rewards = [region_to_reward[region] for region in rollout_regions]
+    return rewards, rollout_regions, len(unique_regions)
 
 
 def build_region_mcts(
     ctx: SearchContext,
     num_iterations: int,
+    num_rollouts: int,
     exploration_c: float,
-    virtual_loss: float,
     alpha: float,
 ) -> RegionResult:
-    """Build a region using Monte Carlo Tree Search.
+    """Build a region using Monte Carlo Tree Search with leaf parallelization.
 
-    Includes:
-    - Batch collection and evaluation
-    - Terminal caching to avoid re-evaluation
-    - Virtual loss for parallel safety
-    - Mean+max backup for value estimation
+    Each iteration:
+    1. Selection via UCT down to a leaf.
+    2. Expansion of one new child (if non-terminal).
+    3. ``num_rollouts`` independent random rollouts from the leaf.
+    4. Backup of all rollout rewards along the path.
 
     Args:
-        ctx: Search context with model state and parameters
-        num_iterations: Number of MCTS iterations (batch collections)
-        exploration_c: UCT exploration constant
-        virtual_loss: Multiplier for pending counter in UCT
+        ctx: Search context with model state and parameters.
+        num_iterations: Number of MCTS iterations.
+        num_rollouts: Number of random rollouts per selected leaf.
+        exploration_c: UCT exploration constant.
         alpha: Weight on max vs mean in the UCT Q-value,
             ``Q = alpha * max + (1 - alpha) * mean``. Must be in [0, 1].
 
     Returns:
         RegionResult with region, score, and stats.
     """
-    # Create root node
     root_region = frozenset({ctx.seed_idx})
     root = MCTSNode(region=root_region, parent=None)
 
@@ -300,85 +209,42 @@ def build_region_mcts(
     eval_count = 0
     trajectory: list[dict[str, float]] = []
 
-    # DEBUG counters (remove after verifying)
-    dbg_max_depth = 0
-    dbg_terminal_selected = 0
-    dbg_cache_hits = 0
-    dbg_dedupe_savings = 0
-    dbg_batches_with_dedupe = 0
-
-    # --- MAIN MCTS LOOP ---
     for _ in tqdm(range(num_iterations), desc="MCTS", unit="iter"):
-        # --- PHASE 1: BATCH COLLECTION ---
-        batch_paths, batch_rollout_regions, cached_rewards = _collect_mcts_batch(
-            ctx=ctx,
-            root=root,
-            exploration_c=exploration_c,
-            virtual_loss=virtual_loss,
-            alpha=alpha,
-        )
+        # --- SELECTION ---
+        node = root
+        path = [node]
+        while is_fully_expanded(
+            node, ctx.image_graph, ctx.used_segments
+        ) and not is_terminal(
+            node.region, ctx.image_graph, ctx.used_segments, ctx.desired_length
+        ):
+            node = select_uct_child(node, exploration_c, alpha)
+            path.append(node)
 
-        # DEBUG: inspect tree depth and terminal arrivals for this batch
-        for path in batch_paths:
-            final_node = path[-1]
-            depth = len(final_node.region)
-            if depth > dbg_max_depth:
-                dbg_max_depth = depth
-            if is_terminal(
-                final_node.region,
-                ctx.image_graph,
-                ctx.used_segments,
-                ctx.desired_length,
-            ):
-                dbg_terminal_selected += 1
-        cache_hits_this_batch = sum(1 for r in cached_rewards if r is not None)
-        dbg_cache_hits += cache_hits_this_batch
+        # --- EXPANSION ---
+        if not is_terminal(
+            node.region, ctx.image_graph, ctx.used_segments, ctx.desired_length
+        ):
+            child = expand_node(node, ctx.image_graph, ctx.used_segments)
+            if child is not None:
+                node = child
+                path.append(node)
 
-        # --- PHASE 2: BATCH EVALUATION ---
-        batch_rewards, batch_eval_count = _evaluate_mcts_batch(
-            ctx=ctx,
-            batch_rollout_regions=batch_rollout_regions,
-            cached_rewards=cached_rewards,
-        )
-        eval_count += batch_eval_count
+        # --- SIMULATION ---
+        rewards, rollout_regions, evals = simulate_leaf(ctx, node, num_rollouts)
+        eval_count += evals
 
-        # DEBUG: did within-batch dedupe fire?
-        uncached_count = len(cached_rewards) - cache_hits_this_batch
-        savings = uncached_count - batch_eval_count
-        if savings > 0:
-            dbg_dedupe_savings += savings
-            dbg_batches_with_dedupe += 1
-
-        # Update best region if we found a better one
-        for i, reward in enumerate(batch_rewards):
+        for region, reward in zip(rollout_regions, rewards, strict=True):
             if reward > best_score:
                 best_score = reward
-                best_region = batch_rollout_regions[i]
+                best_region = region
 
         trajectory.append({"evals": eval_count, "best_score": best_score})
 
-        # --- PHASE 3: BATCH BACKUP ---
-        backup_paths(batch_paths, batch_rewards)
+        # --- BACKUP ---
+        backup_path(path, rewards)
 
     best_score = best_score * ctx.optimization_sign
-
-    total_rollouts = num_iterations * ctx.batch_size
-    print(
-        f"[MCTS DEBUG] iters={num_iterations} batch={ctx.batch_size} "
-        f"rollouts={total_rollouts} eval_count={eval_count}"
-    )
-    print(
-        f"[MCTS DEBUG] max_tree_depth={dbg_max_depth} "
-        f"(desired_length={ctx.desired_length})"
-    )
-    print(
-        f"[MCTS DEBUG] terminal_reached_by_selection={dbg_terminal_selected} "
-        f"cache_hits={dbg_cache_hits}"
-    )
-    print(
-        f"[MCTS DEBUG] within_batch_dedupe_savings={dbg_dedupe_savings} "
-        f"across {dbg_batches_with_dedupe} batches"
-    )
 
     return RegionResult(
         region=best_region,
