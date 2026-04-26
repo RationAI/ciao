@@ -1,0 +1,5 @@
+_target_: ciao.explainer.explanation_methods.make_mcgs_method
+num_iterations: 100
+num_rollouts: 64
+exploration_c: 1.4
+alpha: 0.0
