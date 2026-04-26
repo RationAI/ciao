@@ -27,3 +27,45 @@ def make_lookahead_method(lookahead_distance: int = 2) -> ExplanationMethodFn:
         )
 
     return method
+
+
+def make_mcgs_method(
+    num_iterations: int = 100,
+    num_rollouts: int = 64,
+    exploration_c: float = 1.4,
+    alpha: float = 0.0,
+) -> ExplanationMethodFn:
+    """Return a function that generates an MCGS-based region building strategy.
+
+    Args:
+        num_iterations: Number of MCGS iterations.
+        num_rollouts: Number of random rollouts per selected leaf (leaf parallelization).
+        exploration_c: UCT exploration constant.
+        alpha: Weight on max vs mean in the UCT Q-value,
+            ``Q = alpha * max + (1 - alpha) * mean``. Must be in [0, 1].
+
+    Returns:
+        ExplanationMethodFn: Method computing contextual importance via MCGS search.
+    """
+    if num_iterations < 1:
+        raise ValueError(f"num_iterations must be >= 1, got {num_iterations}")
+    if num_rollouts < 1:
+        raise ValueError(f"num_rollouts must be >= 1, got {num_rollouts}")
+    if exploration_c <= 0:
+        raise ValueError(f"exploration_c must be > 0, got {exploration_c}")
+    if not 0.0 <= alpha <= 1.0:
+        raise ValueError(f"alpha must be in [0, 1], got {alpha}")
+
+    def method(ctx: SearchContext) -> RegionResult:
+        """Find the region via Monte Carlo Graph Search."""
+        from ciao.algorithm.mcgs import build_region_mcgs
+
+        return build_region_mcgs(
+            ctx=ctx,
+            num_iterations=num_iterations,
+            num_rollouts=num_rollouts,
+            exploration_c=exploration_c,
+            alpha=alpha,
+        )
+
+    return method
