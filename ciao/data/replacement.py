@@ -3,7 +3,7 @@
 import torch
 import torchvision.transforms.functional as TF
 
-from ciao.data.preprocessing import IMAGENET_MEAN, IMAGENET_STD
+from ciao.data.constants import IMAGENET_MEAN, IMAGENET_STD
 from ciao.typing import ReplacementFn
 
 

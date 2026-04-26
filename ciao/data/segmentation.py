@@ -5,7 +5,7 @@ import torch
 from skimage.segmentation import slic
 
 from ciao.algorithm.graph import ImageGraph
-from ciao.data.preprocessing import IMAGENET_MEAN, IMAGENET_STD
+from ciao.data.constants import IMAGENET_MEAN, IMAGENET_STD
 from ciao.typing import SegmentationFn
 
 
