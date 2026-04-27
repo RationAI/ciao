@@ -23,6 +23,7 @@ class ExplanationResult:
     input_batch: torch.Tensor
     target_class_idx: int
     class_name: str
+    original_logit: float
     segments: torch.Tensor
     segment_scores: dict[int, float]  # Segment ID -> score
     regions: list[RegionResult]
@@ -113,15 +114,22 @@ class CIAOExplainer:
                 f"input_tensor device ({input_tensor.device})"
             )
 
-        # 3. Get target class
+        # 3. Compute base logits/probabilities once and resolve target class.
+        original_logits = predictor.get_logits(input_batch)
+        original_probs = torch.nn.functional.softmax(original_logits, dim=1)
+
         if target_class_idx is None:
-            target_class_idx = predictor.get_predicted_class(input_batch)
+            target_class_idx = int(original_logits.argmax(dim=1)[0].item())
 
             if target_class_idx < 0 or target_class_idx >= len(class_names):
                 raise ValueError(
                     f"Model predicted class index {target_class_idx}, but class_names "
                     f"only has {len(class_names)} items. Check predictor configuration."
                 )
+
+        original_logit_tensor = original_logits[0, target_class_idx]
+        original_logit = float(original_logit_tensor.item())
+        original_prob = float(original_probs[0, target_class_idx].item())
 
         # 4. Create segmentation
         image_graph = segmentation(input_tensor)
@@ -133,6 +141,7 @@ class CIAOExplainer:
             replacement_image=replacement_image,
             image_graph=image_graph,
             target_class_idx=target_class_idx,
+            original_logit=original_logit_tensor,
             batch_size=batch_size,
         )
         segment_scores = calculate_segment_scores(X, y)
@@ -147,6 +156,7 @@ class CIAOExplainer:
             target_class_idx=target_class_idx,
             scores=segment_scores,
             max_regions=max_regions,
+            original_prob=original_prob,
             desired_length=desired_length,
             batch_size=batch_size,
         )
@@ -161,4 +171,5 @@ class CIAOExplainer:
             regions=regions,
             class_name=class_name,
             replacement_image=replacement_image,
+            original_logit=original_logit,
         )

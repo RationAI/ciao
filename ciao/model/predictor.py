@@ -19,12 +19,16 @@ class ModelPredictor:
 
     def get_predictions(self, input_batch: torch.Tensor) -> torch.Tensor:
         """Get model predictions (returns probabilities)."""
+        outputs = self.get_logits(input_batch)
+        probabilities = torch.nn.functional.softmax(outputs, dim=1)
+        return probabilities
+
+    def get_logits(self, input_batch: torch.Tensor) -> torch.Tensor:
+        """Get raw model logits for a batch of inputs."""
         input_batch = input_batch.to(self.device)
 
         with torch.no_grad():
-            outputs = self.model(input_batch)
-            probabilities = torch.nn.functional.softmax(outputs, dim=1)
-            return probabilities
+            return self.model(input_batch)
 
     def get_predicted_class(self, input_batch: torch.Tensor) -> int:
         """Get the most likely class index for a single input."""
@@ -33,17 +37,12 @@ class ModelPredictor:
                 f"get_predicted_class expects a single input (batch size 1), but got shape {input_batch.shape}"
             )
 
-        input_batch = input_batch.to(self.device)
-        with torch.no_grad():
-            outputs = self.model(input_batch)
-            return int(outputs.argmax(dim=1)[0].item())
+        outputs = self.get_logits(input_batch)
+        return int(outputs.argmax(dim=1)[0].item())
 
     def get_class_logit_batch(
         self, input_batch: torch.Tensor, target_class_idx: int
     ) -> torch.Tensor:
         """Get raw logits for a specific target class across a batch of images."""
-        input_batch = input_batch.to(self.device)
-
-        with torch.no_grad():
-            outputs = self.model(input_batch)
-            return outputs[:, target_class_idx]
+        outputs = self.get_logits(input_batch)
+        return outputs[:, target_class_idx]

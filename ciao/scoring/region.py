@@ -91,6 +91,7 @@ def calculate_region_deltas(
     replacement_image: torch.Tensor,
     target_class_idx: int,
     batch_size: int = 64,
+    original_logit: torch.Tensor | None = None,
 ) -> list[float]:
     """Calculate masking deltas for region candidates using batched inference.
 
@@ -102,6 +103,7 @@ def calculate_region_deltas(
         replacement_image: Replacement tensor [C, H, W]
         target_class_idx: Target class index
         batch_size: Batch size for internal batching
+        original_logit: Optional pre-computed unmasked target-class logit
 
     Returns:
         Delta scores for each candidate
@@ -115,9 +117,10 @@ def calculate_region_deltas(
 
     with torch.no_grad():
         # Keep original_logit as a tensor to maintain vectorized operations
-        original_logit = predictor.get_class_logit_batch(input_batch, target_class_idx)[
-            0
-        ]
+        if original_logit is None:
+            original_logit = predictor.get_class_logit_batch(
+                input_batch, target_class_idx
+            )[0]
 
         all_deltas: list[float] = []
         num_masks = len(segment_sets)

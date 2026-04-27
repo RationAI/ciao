@@ -96,20 +96,26 @@ def _log_trajectory(run_id: str, results: ExplanationResult) -> None:
 
 
 def _log_explanation_results(
-    run_id: str, results: ExplanationResult, elapsed: float
+    run_id: str,
+    results: ExplanationResult,
+    elapsed: float,
 ) -> None:
-    """Log explanation params, per-region metrics, trajectory, and timing to MLflow."""
+    """Log explanation params, target logit, per-region metrics, trajectory, and timing to MLflow."""
+    original_logit = results.original_logit
+
     mlflow.log_params(
         {
             "target_class_idx": results.target_class_idx,
             "class_name": results.class_name,
         }
     )
+    mlflow.log_metric("original_logit", original_logit)
 
     for idx, region in enumerate(results.regions):
         mlflow.log_metrics(
             {
                 f"region_{idx}/final_score": region.score,
+                f"region_{idx}/original_logit": original_logit,
                 f"region_{idx}/original_prob": region.original_prob,
                 f"region_{idx}/masked_prob": region.masked_prob,
                 f"region_{idx}/probability_drop": region.probability_drop,

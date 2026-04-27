@@ -18,6 +18,7 @@ def build_all_regions(
     target_class_idx: int,
     scores: dict[int, float],
     max_regions: int,
+    original_prob: float | None = None,
     desired_length: int = 30,
     batch_size: int = 64,
 ) -> list[RegionResult]:
@@ -36,6 +37,7 @@ def build_all_regions(
         target_class_idx: Target class index
         scores: Base segment scores
         max_regions: Maximum number of regions to construct
+        original_prob: Optional pre-computed unmasked probability for the target class
         desired_length: Target number of segments per region
         batch_size: Batch size for model evaluation
 
@@ -45,7 +47,10 @@ def build_all_regions(
     regions: list[RegionResult] = []
     used_segments: set[int] = set()
 
-    original_prob = predictor.get_predictions(input_batch)[0, target_class_idx].item()
+    if original_prob is None:
+        original_prob = predictor.get_predictions(input_batch)[
+            0, target_class_idx
+        ].item()
 
     for _ in range(max_regions):
         # Find best unprocessed seed

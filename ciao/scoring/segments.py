@@ -18,6 +18,7 @@ def create_surrogate_dataset(
     replacement_image: torch.Tensor,
     image_graph: ImageGraph,
     target_class_idx: int,
+    original_logit: torch.Tensor,
     neighborhood_distance: int = 1,
     batch_size: int = 16,
 ) -> tuple[npt.NDArray[np.int8], npt.NDArray[np.float32]]:
@@ -38,6 +39,7 @@ def create_surrogate_dataset(
         replacement_image: Replacement tensor [C, H, W]
         image_graph: ImageGraph instance with segments and adj_list
         target_class_idx: Target class index
+        original_logit: Pre-computed unmasked target-class logit
         neighborhood_distance: Distance for neighborhood masking
         batch_size: Batch size for processing segments
 
@@ -79,6 +81,7 @@ def create_surrogate_dataset(
         replacement_image,
         target_class_idx,
         batch_size=batch_size,
+        original_logit=original_logit,
     )
 
     # Create surrogate dataset
