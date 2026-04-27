@@ -82,7 +82,7 @@ def expand_node(
     seg_id = random.choice(unexpanded)
     child_region = node.region | frozenset({seg_id})
 
-    child = MCTSNode(region=child_region, parent=node)
+    child = MCTSNode(region=child_region)
     node.children[seg_id] = child
 
     return child
@@ -195,7 +195,7 @@ def build_region_mcts(
         RegionResult with region, score, and stats.
     """
     root_region = frozenset({ctx.seed_idx})
-    root = MCTSNode(region=root_region, parent=None)
+    root = MCTSNode(region=root_region)
 
     best_region = root.region
     best_score = -float("inf")
