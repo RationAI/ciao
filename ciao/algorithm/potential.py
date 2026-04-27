@@ -142,15 +142,14 @@ def sampling_phase(
                 used_segments=used_segments,
             )
 
-            frozen_region = frozenset(sampled_region)
-            if frozen_region in region_to_frontier_hits:
+            if sampled_region in region_to_frontier_hits:
                 continue
 
             # Bucketization: Which frontier nodes appear in this expansion?
             hits = sampled_region & current_frontier
-            region_to_frontier_hits[frozen_region] = hits
+            region_to_frontier_hits[sampled_region] = hits
 
-            if frozen_region not in evaluated_scores:
+            if sampled_region not in evaluated_scores:
                 regions_to_evaluate.append(sampled_region)
 
     if not region_to_frontier_hits:
@@ -169,7 +168,7 @@ def sampling_phase(
         )
 
         for region, score in zip(regions_to_evaluate, scores, strict=True):
-            evaluated_scores[frozenset(region)] = score
+            evaluated_scores[region] = score
 
     # --- Distribution to Potentials ---
     potentials: dict[int, list[float]] = {}
@@ -182,3 +181,12 @@ def sampling_phase(
             potentials.setdefault(neighbor_id, []).append(signed_score)
 
     return potentials, len(regions_to_evaluate)
+
+
+# TODO: maybe add fixed num_simulations for the whole iterations? So that I can control it?
+
+# TODO: maybe add an option to do UCB instead of the potentials
+
+# TODO: shouldn't we track the trajectory more precisely? Inside the sampling phase?
+
+# TODO: keep track of the best score, maybe some cache? use the evaluated_scores and do sth like redistribute_history to the best neighbor?
