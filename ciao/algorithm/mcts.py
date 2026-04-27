@@ -74,7 +74,7 @@ def expand_node(
         New child node if created, None if no expansion possible
     """
     frontier = image_graph.get_frontier(node.region, used_region)
-    unexpanded = [seg_id for seg_id in frontier if seg_id not in node.children]
+    unexpanded = sorted(seg_id for seg_id in frontier if seg_id not in node.children)
 
     if not unexpanded:
         return None
