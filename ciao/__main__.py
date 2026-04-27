@@ -1,9 +1,11 @@
+import random
 import time
 from contextlib import nullcontext
 from pathlib import Path
 
 import hydra
 import mlflow
+import numpy as np
 import torch
 from hydra.utils import instantiate
 from mlflow.entities import Metric
@@ -16,6 +18,15 @@ from ciao.typing import ExplanationMethodFn, ReplacementFn, SegmentationFn
 
 
 MLFLOW_LOG_BATCH_LIMIT = 1000
+
+
+def _seed_everything(seed: int) -> None:
+    """Seed all RNG sources used (or potentially used) downstream."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 def _flatten_params(obj: object, parent_key: str = "") -> dict[str, object]:
@@ -149,6 +160,8 @@ def _print_summary(
 
 @hydra.main(version_base=None, config_path="../configs", config_name="base")
 def main(cfg: DictConfig) -> None:
+    _seed_everything(cfg.seed)
+
     mlflow.set_tracking_uri(cfg.logger.tracking_uri)
     mlflow.set_experiment(cfg.logger.experiment_name)
 

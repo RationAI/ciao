@@ -13,3 +13,4 @@ target_class_idx: null
 max_regions: 1
 desired_length: 30
 batch_size: 64
+seed: 42

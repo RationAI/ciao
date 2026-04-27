@@ -75,7 +75,7 @@ class ImageGraph:
                 break  # Dead end, cannot expand further
 
             # Pick a random neighbor and add it
-            chosen = random.choice(tuple(frontier))
+            chosen = random.choice(sorted(frontier))
             current_superset.add(chosen)
 
         return frozenset(current_superset)
