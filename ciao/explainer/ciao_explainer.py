@@ -154,6 +154,7 @@ class CIAOExplainer:
             replacement_image=replacement_image,
             image_graph=image_graph,
             target_class_idx=target_class_idx,
+            original_logit=original_logit_tensor,
             scores=segment_scores,
             max_regions=max_regions,
             original_prob=original_prob,

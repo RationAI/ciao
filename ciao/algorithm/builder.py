@@ -16,9 +16,10 @@ def build_all_regions(
     replacement_image: torch.Tensor,
     image_graph: ImageGraph,
     target_class_idx: int,
+    original_logit: torch.Tensor,
     scores: dict[int, float],
     max_regions: int,
-    original_prob: float | None = None,
+    original_prob: float,
     desired_length: int = 30,
     batch_size: int = 64,
 ) -> list[RegionResult]:
@@ -35,9 +36,10 @@ def build_all_regions(
         replacement_image: Replacement tensor
         image_graph: Graph representation of image segments
         target_class_idx: Target class index
+        original_logit: Pre-computed unmasked logit for the target class
         scores: Base segment scores
         max_regions: Maximum number of regions to construct
-        original_prob: Optional pre-computed unmasked probability for the target class
+        original_prob: Pre-computed unmasked probability for the target class
         desired_length: Target number of segments per region
         batch_size: Batch size for model evaluation
 
@@ -46,11 +48,6 @@ def build_all_regions(
     """
     regions: list[RegionResult] = []
     used_segments: set[int] = set()
-
-    if original_prob is None:
-        original_prob = predictor.get_predictions(input_batch)[
-            0, target_class_idx
-        ].item()
 
     for _ in range(max_regions):
         # Find best unprocessed seed
@@ -72,6 +69,7 @@ def build_all_regions(
             replacement_image=replacement_image,
             image_graph=image_graph,
             target_class_idx=target_class_idx,
+            original_logit=original_logit,
             seed_idx=seed_idx,
             optimization_sign=optimization_sign,
             used_segments=frozenset(used_segments),
