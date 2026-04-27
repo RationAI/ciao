@@ -53,24 +53,20 @@ def select_uct_child(
     ]
     min_q = min(q_values)
     max_q = max(q_values)
+    total_edge_visits = sum(node.edge_stats[a].visits for a in actions)
+    log_parent_visits = math.log(max(1, total_edge_visits))
 
-    best_uct = -float("inf")
-    best_action = actions[0]
-
-    for action, q_value in zip(actions, q_values, strict=True):
+    def uct_score(action_q: tuple[int, float]) -> float:
+        action, q_value = action_q
         if max_q > min_q:
             q_norm = (2.0 * (q_value - min_q) / (max_q - min_q)) - 1.0
         else:
             q_norm = 1.0
-
         edge_n = node.edge_stats[action].visits
-        explore = exploration_c * math.sqrt(math.log(node.visits) / edge_n)
-        score = q_norm + explore
+        explore = exploration_c * math.sqrt(log_parent_visits / edge_n)
+        return q_norm + explore
 
-        if score > best_uct:
-            best_uct = score
-            best_action = action
-
+    best_action = max(zip(actions, q_values, strict=True), key=uct_score)[0]
     return best_action, node.children[best_action]
 
 
@@ -94,7 +90,7 @@ def expand_node_eager(
 
     new_candidates: list[tuple[int, frozenset[int]]] = []
 
-    for seg_id in frontier:
+    for seg_id in sorted(frontier):
         if seg_id in node.children:
             continue
 
