@@ -29,11 +29,16 @@ def build_region_pure_monte_carlo(
         )
         for _ in range(num_simulations)
     ]
+    # TODO: change so that we sample while num of unique regions < num_simulations
+    # maybe rename num_simulations to sth like target_evals
+    # add a parameter for patience - if we already found `patience` duplicates, stop with simulations. Probably hyperparam
 
     unique_regions = list(dict.fromkeys(sampled_regions))
     if not unique_regions:
         unique_regions = [seed_region]
 
+    # TODO: evaluate in batches - I want the trajectory to be realistic, not just one number
+    # so maybe even add it to the sampling while cycle and every batch_size times call this function
     scores = calculate_region_deltas(
         predictor=ctx.predictor,
         input_batch=ctx.input_batch,
