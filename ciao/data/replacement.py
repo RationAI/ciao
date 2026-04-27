@@ -50,6 +50,28 @@ def mean_color_replacement(image: torch.Tensor) -> torch.Tensor:
     return mean_color.expand(-1, height, width)
 
 
+def imagenet_mean_replacement(image: torch.Tensor) -> torch.Tensor:
+    """ImageNet mean replacement strategy.
+
+    Replaces an image by replacing everything with the dataset-level
+    ImageNet mean color.
+
+    Args:
+        image: Original input tensor of shape (3, H, W).
+
+    Returns:
+        torch.Tensor: Tensor filled with ImageNet mean in normalized space.
+    """
+    _, height, width = image.shape
+
+    imagenet_mean = IMAGENET_MEAN.view(3, 1, 1).to(
+        device=image.device,
+        dtype=image.dtype,
+    )
+    normalized_mean = torch.zeros_like(imagenet_mean)
+    return normalized_mean.expand(-1, height, width)
+
+
 def make_blur_replacement(
     sigma: tuple[float, float] = (5.0, 5.0), kernel_size: tuple[int, int] = (15, 15)
 ) -> ReplacementFn:
