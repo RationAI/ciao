@@ -44,24 +44,18 @@ def select_uct_child(
     q_values = [alpha * c.max_value + (1.0 - alpha) * c.mean_value for c in children]
     min_q = min(q_values)
     max_q = max(q_values)
+    log_parent_visits = math.log(node.visits)
 
-    best_uct = -float("inf")
-    best_child = children[0]
-
-    for child, q_value in zip(children, q_values, strict=True):
+    def uct_score(child_q: tuple[MCTSNode, float]) -> float:
+        child, q_value = child_q
         if max_q > min_q:
             q_norm = (2.0 * (q_value - min_q) / (max_q - min_q)) - 1.0
         else:
             q_norm = 1.0
+        explore = exploration_c * math.sqrt(log_parent_visits / child.visits)
+        return q_norm + explore
 
-        explore = exploration_c * math.sqrt(math.log(node.visits) / child.visits)
-        score = q_norm + explore
-
-        if score > best_uct:
-            best_uct = score
-            best_child = child
-
-    return best_child
+    return max(zip(children, q_values, strict=True), key=uct_score)[0]
 
 
 def expand_node(
@@ -210,25 +204,22 @@ def build_region_mcts(
     trajectory: list[dict[str, float]] = []
 
     for _ in tqdm(range(num_iterations), desc="MCTS", unit="iter"):
-        # --- SELECTION ---
+        # --- SELECTION + EXPANSION ---
         node = root
         path = [node]
-        while is_fully_expanded(
-            node, ctx.image_graph, ctx.used_segments
-        ) and not is_terminal(
-            node.region, ctx.image_graph, ctx.used_segments, ctx.desired_length
-        ):
-            node = select_uct_child(node, exploration_c, alpha)
-            path.append(node)
-
-        # --- EXPANSION ---
-        if not is_terminal(
-            node.region, ctx.image_graph, ctx.used_segments, ctx.desired_length
-        ):
-            child = expand_node(node, ctx.image_graph, ctx.used_segments)
-            if child is not None:
+        while True:
+            if is_terminal(
+                node.region, ctx.image_graph, ctx.used_segments, ctx.desired_length
+            ):
+                break
+            if not is_fully_expanded(node, ctx.image_graph, ctx.used_segments):
+                child = expand_node(node, ctx.image_graph, ctx.used_segments)
+                assert child is not None  # selection invariant: not fully expanded
                 node = child
                 path.append(node)
+                break
+            node = select_uct_child(node, exploration_c, alpha)
+            path.append(node)
 
         # --- SIMULATION ---
         rewards, rollout_regions, evals = simulate_leaf(ctx, node, num_rollouts)
