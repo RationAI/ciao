@@ -100,22 +100,19 @@ def _log_explanation_results(
     results: ExplanationResult,
     elapsed: float,
 ) -> None:
-    """Log explanation params, target logit, per-region metrics, trajectory, and timing to MLflow."""
-    original_logit = results.original_logit
-
+    """Log explanation params, baseline log-odds, per-region metrics, trajectory, and timing to MLflow."""
     mlflow.log_params(
         {
             "target_class_idx": results.target_class_idx,
             "class_name": results.class_name,
         }
     )
-    mlflow.log_metric("original_logit", original_logit)
+    mlflow.log_metric("original_log_odds", results.original_log_odds)
 
     for idx, region in enumerate(results.regions):
         mlflow.log_metrics(
             {
                 f"region_{idx}/final_score": region.score,
-                f"region_{idx}/original_logit": original_logit,
                 f"region_{idx}/original_prob": region.original_prob,
                 f"region_{idx}/masked_prob": region.masked_prob,
                 f"region_{idx}/probability_drop": region.probability_drop,

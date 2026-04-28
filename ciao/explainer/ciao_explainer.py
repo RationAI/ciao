@@ -23,7 +23,7 @@ class ExplanationResult:
     input_batch: torch.Tensor
     target_class_idx: int
     class_name: str
-    original_logit: float
+    original_log_odds: float
     segments: torch.Tensor
     segment_scores: dict[int, float]  # Segment ID -> score
     regions: list[RegionResult]
@@ -127,9 +127,11 @@ class CIAOExplainer:
                     f"only has {len(class_names)} items. Check predictor configuration."
                 )
 
-        original_logit = float(original_logits[0, target_class_idx].item())
         original_prob = float(original_probs[0, target_class_idx].item())
-        original_log_odds = log_odds_for_class(original_logits, target_class_idx)[0]
+        original_log_odds_tensor = log_odds_for_class(
+            original_logits, target_class_idx
+        )[0]
+        original_log_odds = float(original_log_odds_tensor.item())
 
         # 4. Create segmentation
         image_graph = segmentation(input_tensor)
@@ -141,7 +143,7 @@ class CIAOExplainer:
             replacement_image=replacement_image,
             image_graph=image_graph,
             target_class_idx=target_class_idx,
-            original_log_odds=original_log_odds,
+            original_log_odds=original_log_odds_tensor,
             batch_size=batch_size,
         )
         segment_scores = calculate_segment_scores(X, y)
@@ -154,7 +156,7 @@ class CIAOExplainer:
             replacement_image=replacement_image,
             image_graph=image_graph,
             target_class_idx=target_class_idx,
-            original_log_odds=original_log_odds,
+            original_log_odds=original_log_odds_tensor,
             scores=segment_scores,
             max_regions=max_regions,
             original_prob=original_prob,
@@ -172,5 +174,5 @@ class CIAOExplainer:
             regions=regions,
             class_name=class_name,
             replacement_image=replacement_image,
-            original_logit=original_logit,
+            original_log_odds=original_log_odds,
         )
