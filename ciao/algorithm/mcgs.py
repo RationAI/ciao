@@ -177,6 +177,7 @@ def simulate_leaf(
                 replacement_image=ctx.replacement_image,
                 segment_sets=[leaf.region],
                 target_class_idx=ctx.target_class_idx,
+                original_log_odds=ctx.original_log_odds,
                 batch_size=ctx.batch_size,
             )
             reward = raw[0] * ctx.optimization_sign
@@ -201,6 +202,7 @@ def simulate_leaf(
         replacement_image=ctx.replacement_image,
         segment_sets=unique_regions,
         target_class_idx=ctx.target_class_idx,
+        original_log_odds=ctx.original_log_odds,
         batch_size=ctx.batch_size,
     )
     region_to_reward = {
