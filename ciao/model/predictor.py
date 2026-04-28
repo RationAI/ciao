@@ -39,10 +39,3 @@ class ModelPredictor:
 
         outputs = self.get_logits(input_batch)
         return int(outputs.argmax(dim=1)[0].item())
-
-    def get_class_logit_batch(
-        self, input_batch: torch.Tensor, target_class_idx: int
-    ) -> torch.Tensor:
-        """Get raw logits for a specific target class across a batch of images."""
-        outputs = self.get_logits(input_batch)
-        return outputs[:, target_class_idx]

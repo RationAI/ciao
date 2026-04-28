@@ -16,7 +16,7 @@ def build_all_regions(
     replacement_image: torch.Tensor,
     image_graph: ImageGraph,
     target_class_idx: int,
-    original_logit: torch.Tensor,
+    original_log_odds: torch.Tensor,
     scores: dict[int, float],
     max_regions: int,
     original_prob: float,
@@ -36,7 +36,7 @@ def build_all_regions(
         replacement_image: Replacement tensor
         image_graph: Graph representation of image segments
         target_class_idx: Target class index
-        original_logit: Pre-computed unmasked logit for the target class
+        original_log_odds: Pre-computed unmasked target-class log-odds (scalar tensor)
         scores: Base segment scores
         max_regions: Maximum number of regions to construct
         original_prob: Pre-computed unmasked probability for the target class
@@ -69,7 +69,7 @@ def build_all_regions(
             replacement_image=replacement_image,
             image_graph=image_graph,
             target_class_idx=target_class_idx,
-            original_logit=original_logit,
+            original_log_odds=original_log_odds,
             seed_idx=seed_idx,
             optimization_sign=optimization_sign,
             used_segments=frozenset(used_segments),

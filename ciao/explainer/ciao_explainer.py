@@ -8,7 +8,7 @@ import torch
 from ciao.algorithm.builder import build_all_regions
 from ciao.data.preprocessing import load_and_preprocess_image
 from ciao.model.predictor import ModelPredictor
-from ciao.scoring.region import RegionResult
+from ciao.scoring.region import RegionResult, log_odds_for_class
 from ciao.scoring.segments import (
     calculate_segment_scores,
     create_surrogate_dataset,
@@ -127,9 +127,9 @@ class CIAOExplainer:
                     f"only has {len(class_names)} items. Check predictor configuration."
                 )
 
-        original_logit_tensor = original_logits[0, target_class_idx]
-        original_logit = float(original_logit_tensor.item())
+        original_logit = float(original_logits[0, target_class_idx].item())
         original_prob = float(original_probs[0, target_class_idx].item())
+        original_log_odds = log_odds_for_class(original_logits, target_class_idx)[0]
 
         # 4. Create segmentation
         image_graph = segmentation(input_tensor)
@@ -141,7 +141,7 @@ class CIAOExplainer:
             replacement_image=replacement_image,
             image_graph=image_graph,
             target_class_idx=target_class_idx,
-            original_logit=original_logit_tensor,
+            original_log_odds=original_log_odds,
             batch_size=batch_size,
         )
         segment_scores = calculate_segment_scores(X, y)
@@ -154,7 +154,7 @@ class CIAOExplainer:
             replacement_image=replacement_image,
             image_graph=image_graph,
             target_class_idx=target_class_idx,
-            original_logit=original_logit_tensor,
+            original_log_odds=original_log_odds,
             scores=segment_scores,
             max_regions=max_regions,
             original_prob=original_prob,
