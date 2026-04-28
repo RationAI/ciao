@@ -1,0 +1,19 @@
+# @package _global_
+
+# Run with: python -m ciao --config-name runs/batch_example data.batch_path=...
+defaults:
+  - /base
+  - override /data: directory_batch
+  - override /method: lookahead
+  - _self_
+
+desired_length: 30
+max_regions: 1
+batch_size: 64
+
+data:
+  batch_path: ???
+
+logger:
+  experiment_name: Search_Efficiency
+  run_name: "${data.name}_${method._target_}"

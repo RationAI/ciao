@@ -3,7 +3,7 @@ name = "rationai-ciao"
 version = "0.1.0"
 description = "CIAO: Contextual Importance Assessment via Obfuscation - An XAI method for identifying influential image regions"
 authors = [{ name = "David Halmazňa", email = "david.halmazna@mail.muni.cz" }]
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 readme = "README.md"
 license = { file = "LICENSE" }
 dependencies = [

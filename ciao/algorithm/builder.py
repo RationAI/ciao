@@ -5,7 +5,7 @@ import torch
 from ciao.algorithm.context import SearchContext
 from ciao.algorithm.graph import ImageGraph
 from ciao.model.predictor import ModelPredictor
-from ciao.scoring.region import RegionResult
+from ciao.scoring.region import RegionResult, calculate_region_probability_drops
 from ciao.typing import ExplanationMethodFn
 
 
@@ -44,6 +44,8 @@ def build_all_regions(
     """
     regions: list[RegionResult] = []
     used_segments: set[int] = set()
+
+    original_prob = predictor.get_predictions(input_batch)[0, target_class_idx].item()
 
     for _ in range(max_regions):
         # Find best unprocessed seed
@@ -85,6 +87,18 @@ def build_all_regions(
         # Extract and update state
         used_segments = used_segments | current_region
         regions.append(result)
+
+    # Compute probability drops for all finished regions in batched forward passes
+    calculate_region_probability_drops(
+        predictor=predictor,
+        input_batch=input_batch,
+        segments=image_graph.segments,
+        replacement_image=replacement_image,
+        target_class_idx=target_class_idx,
+        original_prob=original_prob,
+        results=regions,
+        batch_size=batch_size,
+    )
 
     # Sort by absolute score
     regions.sort(key=lambda x: abs(x.score), reverse=True)

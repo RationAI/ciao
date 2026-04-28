@@ -42,6 +42,10 @@ def build_region_greedy_lookahead(
     current_region = frozenset([seed_idx])
     known_final_score: float | None = None
 
+    eval_count = 0
+    trajectory: list[dict[str, float]] = []
+    current_best_score = -float("inf")
+
     # Grow region one step at a time
     while len(current_region) < desired_length:
         # Generate all candidate regions via BFS up to lookahead_distance
@@ -68,6 +72,7 @@ def build_region_greedy_lookahead(
             target_class_idx=ctx.target_class_idx,
             batch_size=ctx.batch_size,
         )
+        eval_count += len(candidate_regions)
 
         # Find best candidate (maximize optimization_sign * score)
         best_idx = max(
@@ -76,6 +81,11 @@ def build_region_greedy_lookahead(
         best_region = candidate_regions[best_idx]
         best_score = scores_list[best_idx]
         first_step = candidates[best_region]
+
+        signed_best = best_score * optimization_sign
+        if signed_best > current_best_score:
+            current_best_score = signed_best
+        trajectory.append({"evals": eval_count, "best_score": current_best_score})
 
         # Optimization - commit entire path
         if len(best_region) == desired_length:
@@ -100,10 +110,14 @@ def build_region_greedy_lookahead(
             target_class_idx=ctx.target_class_idx,
             batch_size=1,
         )[0]
+        eval_count += 1
+        trajectory.append({"evals": eval_count, "best_score": current_best_score})
 
     return RegionResult(
         region=current_region,
         score=final_score,
+        evaluations_count=eval_count,
+        trajectory=trajectory,
     )
 
 

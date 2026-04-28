@@ -1,5 +1,5 @@
 from collections.abc import Sequence, Set
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import torch
 
@@ -12,6 +12,18 @@ class RegionResult:
 
     region: frozenset[int]
     score: float
+
+    # Tracking metrics (populated after search completes)
+    original_prob: float = 0.0
+    masked_prob: float = 0.0
+    probability_drop: float = 0.0
+    evaluations_count: int = 0
+    trajectory: list[dict[str, float]] = field(default_factory=list)
+
+    # Top class on the input with this region masked out (populated after search completes)
+    masked_top_class_idx: int = 0
+    masked_top_class_name: str = ""
+    masked_top_prob: float = 0.0
 
 
 def _prepare_tensors_for_model(
@@ -124,6 +136,71 @@ def calculate_region_deltas(
             all_deltas.extend(deltas)
 
         return all_deltas
+
+
+def calculate_region_probability_drops(
+    predictor: ModelPredictor,
+    input_batch: torch.Tensor,
+    segments: torch.Tensor,
+    replacement_image: torch.Tensor,
+    target_class_idx: int,
+    original_prob: float,
+    results: list[RegionResult],
+    batch_size: int = 64,
+) -> list[RegionResult]:
+    """Compute masked class probabilities for all finished regions in batched passes.
+
+    Populates ``original_prob``, ``masked_prob``, and ``probability_drop``
+    on each given *result* (mutates in place **and** returns the list).
+
+    Args:
+        predictor: ModelPredictor instance
+        input_batch: Original image tensor [1, C, H, W]
+        segments: Pixel-to-segment mapping [H, W]
+        replacement_image: Replacement tensor [C, H, W]
+        target_class_idx: Target class index
+        original_prob: Pre-computed unmasked probability for the target class
+        results: RegionResults whose regions will be masked
+        batch_size: Max regions per forward pass
+
+    Returns:
+        The same RegionResults with probability fields populated.
+    """
+    if not results:
+        return results
+
+    input_batch, replacement_image, gpu_segments = _prepare_tensors_for_model(
+        predictor, input_batch, replacement_image, segments
+    )
+
+    region_sets = [r.region for r in results]
+    masked_probs: list[float] = []
+    top_class_idxs: list[int] = []
+    top_class_probs: list[float] = []
+
+    for batch_start in range(0, len(region_sets), batch_size):
+        batch_end = min(batch_start + batch_size, len(region_sets))
+        slice_ = region_sets[batch_start:batch_end]
+        mask_tensor = _build_mask_tensor(gpu_segments, slice_, predictor.device)
+        masked_input = _apply_masks(input_batch, mask_tensor, replacement_image)
+        probs = predictor.get_predictions(masked_input)
+        masked_probs.extend(probs[:, target_class_idx].tolist())
+        top_probs, top_idxs = probs.max(dim=1)
+        top_class_probs.extend(top_probs.tolist())
+        top_class_idxs.extend(top_idxs.tolist())
+
+    class_names = predictor.class_names
+    for result, masked_prob, top_idx, top_prob in zip(
+        results, masked_probs, top_class_idxs, top_class_probs, strict=True
+    ):
+        result.original_prob = original_prob
+        result.masked_prob = masked_prob
+        result.probability_drop = original_prob - masked_prob
+        result.masked_top_class_idx = int(top_idx)
+        result.masked_top_class_name = class_names[int(top_idx)]
+        result.masked_top_prob = float(top_prob)
+
+    return results
 
 
 def select_top_regions(

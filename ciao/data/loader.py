@@ -1,5 +1,6 @@
 """Simple image path resolution utilities."""
 
+import itertools
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -13,6 +14,12 @@ IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 def iter_image_paths(config: DictConfig) -> Iterator[Path]:
     """Generate paths to images based on configuration.
 
+    Reads ``config.data.image_path`` (single image) or
+    ``config.data.batch_path`` (directory), with an optional
+    ``config.data.limit`` to cap the number of yielded paths.
+    For ``batch_path``, paths are yielded lazily in filesystem-traversal
+    order; ordering is not guaranteed to be stable across platforms.
+
     Args:
         config: Hydra config object containing data.image_path or data.batch_path
 
@@ -20,12 +27,17 @@ def iter_image_paths(config: DictConfig) -> Iterator[Path]:
         Iterator of Path objects pointing to valid images
 
     Raises:
-        ValueError: If config specifies both or neither paths
-        FileNotFoundError: If single image_path does not exist
-        NotADirectoryError: If batch_path directory does not exist
+        ValueError: If config specifies both or neither paths,
+                    or if the image extension is unsupported.
+        FileNotFoundError: If single image_path does not exist.
+        NotADirectoryError: If batch_path directory does not exist.
     """
     image_path_value = config.data.get("image_path")
     batch_path_value = config.data.get("batch_path")
+    limit: int | None = config.data.get("limit")
+
+    if limit is not None and limit < 0:
+        raise ValueError(f"data.limit must be non-negative, got: {limit}")
 
     if image_path_value and batch_path_value:
         raise ValueError("Specify exactly one of image_path or batch_path in config")
@@ -44,18 +56,20 @@ def iter_image_paths(config: DictConfig) -> Iterator[Path]:
             raise ValueError(
                 f"image_path must use a supported image extension, got: {image_path}"
             )
-
-    if batch_path_value:
-        directory = Path(batch_path_value)
-        if not directory.is_dir():
-            raise NotADirectoryError(
-                f"batch_path must be a valid directory, got: {directory}. "
-                "Check for typos or incorrect path configuration."
-            )
-
-    if image_path_value:
         yield image_path
-    else:
-        for path in directory.rglob("*"):
-            if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS:
-                yield path
+        return
+
+    directory = Path(batch_path_value)
+    if not directory.is_dir():
+        raise NotADirectoryError(
+            f"batch_path must be a valid directory, got: {directory}. "
+            "Check for typos or incorrect path configuration."
+        )
+
+    paths = (
+        path
+        for path in directory.rglob("*")
+        if path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS
+    )
+
+    yield from itertools.islice(paths, limit)

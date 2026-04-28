@@ -35,7 +35,7 @@ uv run ciao
 Customize the explanation using Hydra configuration overrides:
 
 ```bash
-uv run ciao data.image_path=./my_image.jpg explanation.method=mcts explanation.segment_size=8
+uv run ciao data.image_path=./my_image.jpg method=lookahead segmentation=square
 ```
 
 Alternatively, run as a module:
@@ -118,13 +118,27 @@ ciao/
 │   ├── typing.py                   # Type aliases and definitions
 │   └── __main__.py                 # CLI entry point
 ├── configs/                        # Hydra configuration files
-│   ├── ciao.yaml                   # Main entry point
-│   ├── base.yaml                   # Base configuration
-│   ├── data/                       # Data configurations
-│   │   └── default.yaml
-│   ├── explanation/                # Explanation method configs
-│   │   └── ciao_default.yaml       # Default CIAO parameters
-│   ├── hydra/                      # Hydra settings
-│   └── logger/                     # Logger configurations
+│   ├── base.yaml                   # Base configuration (defaults + hyperparameters)
+│   ├── classes/                    # Class name lists
+│   │   └── imagenet.yaml
+│   ├── data/                       # Data source configurations
+│   │   ├── single_image.yaml       # Single image via image_path
+│   │   └── directory_batch.yaml    # Directory batch with limit
+│   ├── logger/                     # Experiment tracker settings
+│   │   └── mlflow.yaml
+│   ├── method/                     # Search algorithm configs
+│   │   └── lookahead.yaml
+│   ├── model/                      # Model backbone configs
+│   │   └── resnet50.yaml
+│   ├── replacement/                # Obfuscation strategy configs
+│   │   ├── blur.yaml
+│   │   ├── interlacing.yaml
+│   │   ├── mean_color.yaml
+│   │   └── solid_color.yaml
+│   ├── runs/                       # Experiment run compositions
+│   │   └── batch_example.yaml
+│   └── segmentation/               # Segmentation strategy configs
+│       ├── hexagonal.yaml
+│       └── square.yaml
 └── pyproject.toml                  # Project metadata and dependencies
 ```
