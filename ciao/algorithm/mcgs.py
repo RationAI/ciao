@@ -10,12 +10,16 @@ Supports:
 - Leaf parallelization: ``num_rollouts`` random rollouts per selected leaf
 - Eager expansion with grafting from the transposition table
 - Terminal caching to avoid re-evaluating visited states
-- Mean+max backup at both node and edge level
+- Mean+max backup on nodes; edges are visit-count-only
+- Recursive Q update (KataGo-style): ``node.mean_value`` is recomputed
+  bottom-up as a weighted combination of direct rollout rewards and child Qs
 
 Selection details (per outgoing edge of a fully-expanded node):
-- ``Q(s,a) = alpha * edge.max_value + (1 - alpha) * edge.mean_value``
+- ``Q(s,a) = alpha * child.max_value + (1 - alpha) * child.mean_value``
+  (reads recursive Q from the child node, not a local edge average)
 - ``Q_norm`` is local min-max normalization to ``[-1, 1]``
 - ``UCT(s,a) = Q_norm + C * sqrt(ln(N_parent) / edge.visits)``
+  where ``N_parent = sum of all outgoing edge visits from the parent``
 """
 
 import math
@@ -38,17 +42,16 @@ def select_uct_child(
     """Select edge (action, child) with highest UCT score using edge statistics."""
     actions = list(node.children.keys())
 
-    # Prefer edges that have never been traversed from this parent. With grafting,
-    # a child node may have visits > 0 (visited via a different parent) while the
-    # edge from this parent has edge.visits == 0.
+    # Prefer unvisited edges (visits == 0) — both fresh and grafted edges start
+    # with 0 visits from this parent. Grafted child nodes already have good Q
+    # estimates, so the one visit pays off immediately once UCT takes over.
     unvisited = [a for a in actions if node.edge_stats[a].visits == 0]
     if unvisited:
         action = random.choice(unvisited)
         return action, node.children[action]
 
     q_values = [
-        alpha * node.edge_stats[a].max_value
-        + (1.0 - alpha) * node.edge_stats[a].mean_value
+        alpha * node.children[a].max_value + (1.0 - alpha) * node.children[a].mean_value
         for a in actions
     ]
     min_q = min(q_values)
@@ -114,37 +117,59 @@ def expand_node_eager(
     return seg_id, child
 
 
+def _recursive_q(node: MCGSNode) -> float:
+    """Compute node Q as a weighted combination of own rewards and child Qs.
+
+    ``Q(n) = (own_value_sum + sum_a edge.visits[a] * Q(child_a)) / total_visits``
+    where ``total_visits = _own_visits + sum(edge.visits)``.
+    Prior-seeded edge visits from grafting are included in the denominator.
+    """
+    total = node._own_visits + sum(e.visits for e in node.edge_stats.values())
+    if total == 0:
+        return 0.0
+    child_contribution = sum(
+        node.edge_stats[a].visits * node.children[a].mean_value for a in node.edge_stats
+    )
+    return (node._own_value_sum + child_contribution) / total
+
+
 def backup_path(
     path: list[MCGSNode],
     actions: list[int],
     rewards: list[float],
 ) -> None:
-    """Backup multiple rewards along a single path: nodes and edges.
+    """Backup rewards along a path using recursive Q updates.
 
-    Each reward contributes one visit to every node on the path and to every
-    edge taken. ``actions[i]`` is the action taken at ``path[i]`` to reach
-    ``path[i+1]``.
+    The leaf receives direct-evaluation credit (``_own_visits``/``_own_value_sum``).
+    All intermediate nodes are then updated bottom-up: edge visit counts first,
+    then node Q recomputed via ``_recursive_q`` so that every ancestor reflects
+    the current child Qs. Edges store only visit counts; Q is always read
+    directly from child nodes.
+
+    ``actions[i]`` is the action taken at ``path[i]`` to reach ``path[i+1]``.
     """
     k = len(rewards)
     sum_rewards = sum(rewards)
     max_reward = max(rewards)
 
-    for i, node in enumerate(path):
-        new_visits = node.visits + k
-        node.mean_value = (node.mean_value * node.visits + sum_rewards) / new_visits
-        node.visits = new_visits
+    # Leaf: direct evaluation credit
+    leaf = path[-1]
+    leaf._own_visits += k
+    leaf._own_value_sum += sum_rewards
+    leaf.visits += k
+    if max_reward > leaf.max_value:
+        leaf.max_value = max_reward
+    leaf.mean_value = _recursive_q(leaf)
+
+    # Intermediate nodes: increment edge visits, then recompute Q bottom-up
+    for i in range(len(path) - 2, -1, -1):
+        node = path[i]
+        node.edge_stats[actions[i]].visits += k
+
+        node.visits += k
         if max_reward > node.max_value:
             node.max_value = max_reward
-
-        if i < len(actions):
-            edge = node.edge_stats[actions[i]]
-            edge_new_visits = edge.visits + k
-            edge.mean_value = (
-                edge.mean_value * edge.visits + sum_rewards
-            ) / edge_new_visits
-            edge.visits = edge_new_visits
-            if max_reward > edge.max_value:
-                edge.max_value = max_reward
+        node.mean_value = _recursive_q(node)
 
 
 def simulate_leaf(
@@ -166,7 +191,7 @@ def simulate_leaf(
     )
 
     if leaf_is_terminal:
-        if leaf.visits > 0:
+        if leaf._own_visits > 0:
             reward = leaf.mean_value  # already signed in prior backup
             evals = 0
         else:

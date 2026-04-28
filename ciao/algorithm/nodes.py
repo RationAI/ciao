@@ -6,11 +6,13 @@ from dataclasses import dataclass
 
 @dataclass
 class EdgeStats:
-    """Per-edge (parent, action) statistics for MCGS."""
+    """Per-edge (parent, action) visit counter for MCGS.
+
+    Q values are read from the child node directly (recursive Q), so edges
+    only need to track traversal counts for the UCT exploration term.
+    """
 
     visits: int = 0
-    mean_value: float = 0.0
-    max_value: float = -math.inf
 
 
 class MCGSNode:
@@ -29,3 +31,8 @@ class MCGSNode:
         self.visits = 0
         self.mean_value = 0.0
         self.max_value = -math.inf
+
+        # Direct-evaluation counters for the recursive Q formula.
+        # Only updated when this node is the simulation leaf, not when traversed.
+        self._own_visits: int = 0
+        self._own_value_sum: float = 0.0
