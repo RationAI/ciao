@@ -11,6 +11,7 @@ from ciao.data.replacement import (
 )
 from ciao.data.segmentation import (
     make_hexagonal_segmentation,
+    make_slic_segmentation,
     make_square_segmentation,
 )
 
@@ -22,6 +23,7 @@ __all__ = [
     "load_and_preprocess_image",
     "make_blur_replacement",
     "make_hexagonal_segmentation",
+    "make_slic_segmentation",
     "make_solid_color_replacement",
     "make_square_segmentation",
     "mean_color_replacement",

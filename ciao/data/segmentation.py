@@ -2,8 +2,10 @@ import math
 
 import numpy as np
 import torch
+from skimage.segmentation import slic
 
 from ciao.algorithm.graph import ImageGraph
+from ciao.data.constants import IMAGENET_MEAN, IMAGENET_STD
 from ciao.typing import SegmentationFn
 
 
@@ -42,14 +44,15 @@ def _hex_round_vectorized(
     return rx.astype(np.int32), rz.astype(np.int32)
 
 
-def _build_square_adjacency_list(
-    segments: torch.Tensor, neighborhood: int = 8
-) -> list[frozenset[int]]:
-    """Build adjacency list from segment array (for square grids) using vectorized operations.
+def _build_pixel_adjacency_list(segments: torch.Tensor) -> list[frozenset[int]]:
+    """Build segment adjacency list from a 2D pixel label map.
+
+    Works for any segmentation (regular grids or irregular blobs): two segments
+    are neighbors iff at least one pair of their pixels shares an edge
+    (4-connectivity).
 
     Args:
         segments: 2D tensor mapping pixels to segment IDs
-        neighborhood: 4 or 8 connectivity
 
     Returns:
         List of frozensets — adj[i] is the set of neighbors of segment i
@@ -69,26 +72,9 @@ def _build_square_adjacency_list(
     mask_v = top != bottom
     edges_v = torch.column_stack([top[mask_v], bottom[mask_v]])
 
-    # Collect all edges
-    edge_arrays = [edges_h, edges_v]
-
-    if neighborhood == 8:
-        # Vectorized diagonal adjacency (down-right)
-        top_left = segments[:-1, :-1].flatten()
-        bottom_right = segments[1:, 1:].flatten()
-        mask_dr = top_left != bottom_right
-        edges_dr = torch.column_stack([top_left[mask_dr], bottom_right[mask_dr]])
-
-        # Vectorized diagonal adjacency (down-left)
-        top_right = segments[:-1, 1:].flatten()
-        bottom_left = segments[1:, :-1].flatten()
-        mask_dl = top_right != bottom_left
-        edges_dl = torch.column_stack([top_right[mask_dl], bottom_left[mask_dl]])
-
-        edge_arrays.extend([edges_dr, edges_dl])
-
-    # Stack all edges together and populate adjacency sets in a single loop
-    all_edges = torch.vstack(edge_arrays)
+    all_edges = torch.vstack([edges_h, edges_v])
+    all_edges, _ = torch.sort(all_edges, dim=1)
+    all_edges = torch.unique(all_edges, dim=0)
     for edge in all_edges:
         seg1, seg2 = edge[0].item(), edge[1].item()
         adjacency_sets[seg1].add(seg2)
@@ -124,7 +110,7 @@ def _build_hex_adjacency_list(
 
 
 def _create_square_grid(
-    input_tensor: torch.Tensor, square_size: int = 14, neighborhood: int = 8
+    input_tensor: torch.Tensor, square_size: int = 14
 ) -> ImageGraph:
     """Create a grid of squares with frozenset adjacency."""
     _channels, height, width = input_tensor.shape
@@ -141,7 +127,7 @@ def _create_square_grid(
             segments[row:row_end, col:col_end] = segment_id
             segment_id += 1
 
-    adj_list = _build_square_adjacency_list(segments, neighborhood=neighborhood)
+    adj_list = _build_pixel_adjacency_list(segments)
     return ImageGraph(segments=segments, adj_list=adj_list)
 
 
@@ -151,7 +137,7 @@ def _create_hexagonal_grid(
     """Create a grid of hexagons with adjacency list using vectorized operations.
 
     Uses axial coordinate system for precise hexagonal tiling (flat-top orientation).
-    Each hexagon has exactly 6 neighbors (neighborhood parameter ignored).
+    Each interior hexagon has 6 neighbors; boundary hexagons have fewer.
 
     Args:
         input_tensor: Input image tensor [C, H, W]
@@ -208,28 +194,75 @@ def make_hexagonal_segmentation(hex_radius: int = 4) -> SegmentationFn:
     return segmentation
 
 
-def make_square_segmentation(
-    square_size: int = 4, neighborhood: int = 8
-) -> SegmentationFn:
+def make_square_segmentation(square_size: int = 4) -> SegmentationFn:
     """Return a function that segments images into a square grid.
 
     Args:
         square_size: Size of each square segment block edge.
-        neighborhood: Type of neighborhood connectivity (4 or 8).
 
     Returns:
         SegmentationFn: A callable that generates a square bounding ImageGraph.
     """
     if square_size <= 0:
         raise ValueError(f"square_size must be > 0, got {square_size}")
-    if neighborhood not in (4, 8):
-        raise ValueError(f"neighborhood must be 4 or 8, got {neighborhood}")
 
     def segmentation(image: torch.Tensor) -> ImageGraph:
-        return _create_square_grid(
+        return _create_square_grid(image, square_size=square_size)
+
+    return segmentation
+
+
+def _create_slic_segments(
+    input_tensor: torch.Tensor,
+    n_segments: int,
+    compactness: float,
+) -> ImageGraph:
+    """Run SLIC on a (ImageNet-normalized) image tensor and build an ImageGraph."""
+    mean = np.asarray(IMAGENET_MEAN, dtype=np.float32)
+    std = np.asarray(IMAGENET_STD, dtype=np.float32)
+    img = input_tensor.detach().cpu().float().numpy().transpose(1, 2, 0)
+    img = np.clip(img * std + mean, 0.0, 1.0)
+
+    labels = slic(
+        img,
+        n_segments=n_segments,
+        compactness=compactness,
+        start_label=0,
+        enforce_connectivity=True,
+        channel_axis=-1,
+    )
+
+    segments = torch.tensor(
+        labels.astype(np.int32), dtype=torch.int32, device=input_tensor.device
+    )
+    adj_list = _build_pixel_adjacency_list(segments)
+    return ImageGraph(segments=segments, adj_list=adj_list)
+
+
+def make_slic_segmentation(
+    n_segments: int = 200, compactness: float = 10.0
+) -> SegmentationFn:
+    """Return a function that segments images with SLIC superpixels.
+
+    Args:
+        n_segments: Approximate number of superpixels to produce.
+        compactness: Balances color proximity and space proximity. Higher values
+            give more weight to space proximity, yielding more compact, squarer
+            superpixels.
+
+    Returns:
+        SegmentationFn: A callable that generates a SLIC ImageGraph.
+    """
+    if n_segments <= 0:
+        raise ValueError(f"n_segments must be > 0, got {n_segments}")
+    if compactness <= 0:
+        raise ValueError(f"compactness must be > 0, got {compactness}")
+
+    def segmentation(image: torch.Tensor) -> ImageGraph:
+        return _create_slic_segments(
             image,
-            square_size=square_size,
-            neighborhood=neighborhood,
+            n_segments=n_segments,
+            compactness=compactness,
         )
 
     return segmentation
