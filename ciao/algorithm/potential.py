@@ -81,6 +81,7 @@ def build_region_potential(
             replacement_image=ctx.replacement_image,
             segment_sets=[curr_region],
             target_class_idx=ctx.target_class_idx,
+            original_log_odds=ctx.original_log_odds,
             batch_size=ctx.batch_size,
         )[0]
         eval_count += 1
@@ -164,6 +165,7 @@ def sampling_phase(
             replacement_image=ctx.replacement_image,
             segment_sets=regions_to_evaluate,
             target_class_idx=ctx.target_class_idx,
+            original_log_odds=ctx.original_log_odds,
             batch_size=ctx.batch_size,
         )
 
