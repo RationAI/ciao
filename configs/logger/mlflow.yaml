@@ -1,3 +1,4 @@
 experiment_name: "ciao-explanations"
 run_name: null
 tracking_uri: null
+log_figures: true

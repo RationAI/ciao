@@ -4,6 +4,7 @@ from contextlib import nullcontext
 from pathlib import Path
 
 import hydra
+import matplotlib.pyplot as plt
 import mlflow
 import numpy as np
 import torch
@@ -15,6 +16,7 @@ from ciao.data.loader import iter_image_paths
 from ciao.explainer.ciao_explainer import CIAOExplainer, ExplanationResult
 from ciao.model.predictor import ModelPredictor
 from ciao.typing import ExplanationMethodFn, ReplacementFn, SegmentationFn
+from ciao.visualization import plot_overview, plot_region_scores, plot_regions
 
 
 MLFLOW_LOG_BATCH_LIMIT = 1000
@@ -131,6 +133,21 @@ def _log_explanation_results(
     mlflow.log_metric("time_seconds", elapsed)
 
 
+def _log_figures(results: ExplanationResult) -> None:
+    """Render visualization figures and log them as MLflow artifacts."""
+    if not results.regions:
+        return
+
+    for name, plot_fn in (
+        ("overview", plot_overview),
+        ("regions", plot_regions),
+        ("region_scores", plot_region_scores),
+    ):
+        fig = plot_fn(results)
+        mlflow.log_figure(fig, f"figures/{name}.png")
+        plt.close(fig)
+
+
 def _print_summary(
     image_path: Path, results: ExplanationResult, elapsed: float
 ) -> None:
@@ -200,6 +217,8 @@ def main(cfg: DictConfig) -> None:
                 elapsed = time.perf_counter() - start_time
 
                 _log_explanation_results(run.info.run_id, results, elapsed)
+                if cfg.logger.log_figures:
+                    _log_figures(results)
                 _print_summary(image_path, results, elapsed)
 
 
