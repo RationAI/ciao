@@ -81,6 +81,7 @@ def build_region_potential(
             replacement_image=ctx.replacement_image,
             segment_sets=[curr_region],
             target_class_idx=ctx.target_class_idx,
+            original_log_odds=ctx.original_log_odds,
             batch_size=ctx.batch_size,
         )[0]
         eval_count += 1
@@ -164,6 +165,7 @@ def sampling_phase(
             replacement_image=ctx.replacement_image,
             segment_sets=regions_to_evaluate,
             target_class_idx=ctx.target_class_idx,
+            original_log_odds=ctx.original_log_odds,
             batch_size=ctx.batch_size,
         )
 
@@ -183,10 +185,10 @@ def sampling_phase(
     return potentials, len(regions_to_evaluate)
 
 
-# TODO: maybe add fixed num_simulations for the whole iterations? So that I can control it?
+# TODO: maybe add fixed num_simulations for the whole iterations? So that I can control it? (keep as TODO, maybe later)
 
-# TODO: maybe add an option to do UCB instead of the potentials
+# TODO: add an option to do UCB instead of the potentials (but with batching - another hyperparam)
 
 # TODO: shouldn't we track the trajectory more precisely? Inside the sampling phase?
 
-# TODO: keep track of the best score, maybe some cache? use the evaluated_scores and do sth like redistribute_history to the best neighbor?
+# TODO: keep track of the best score, maybe some cache? use the evaluated_scores and do sth like redistribute_history to the best neighbor? So that after adding one segment, we already can use some of the information we already had?
