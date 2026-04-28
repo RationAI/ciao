@@ -46,6 +46,7 @@ def build_region_pure_monte_carlo(
         replacement_image=ctx.replacement_image,
         segment_sets=unique_regions,
         target_class_idx=ctx.target_class_idx,
+        original_log_odds=ctx.original_log_odds,
         batch_size=ctx.batch_size,
     )
 
