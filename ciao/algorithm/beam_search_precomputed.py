@@ -72,6 +72,7 @@ def build_region_beam_search(
         replacement_image=ctx.replacement_image,
         segment_sets=[best_region],
         target_class_idx=ctx.target_class_idx,
+        original_log_odds=ctx.original_log_odds,
         batch_size=1,
     )[0]
 
