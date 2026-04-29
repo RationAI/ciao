@@ -3,6 +3,7 @@
 Rolling horizon strategy: Look ahead multiple steps but only commit one step at a time.
 """
 
+import time
 from collections import deque
 from collections.abc import Set
 
@@ -45,6 +46,7 @@ def build_region_greedy_lookahead(
     eval_count = 0
     trajectory: list[dict[str, float]] = []
     current_best_score = -float("inf")
+    t0 = time.monotonic()
 
     # Grow region one step at a time
     while len(current_region) < desired_length:
@@ -71,6 +73,7 @@ def build_region_greedy_lookahead(
             replacement_image=ctx.replacement_image,
             target_class_idx=ctx.target_class_idx,
             batch_size=ctx.batch_size,
+            original_log_odds=ctx.original_log_odds,
         )
         eval_count += len(candidate_regions)
 
@@ -85,7 +88,13 @@ def build_region_greedy_lookahead(
         signed_best = best_score * optimization_sign
         if signed_best > current_best_score:
             current_best_score = signed_best
-        trajectory.append({"evals": eval_count, "best_score": current_best_score})
+        trajectory.append(
+            {
+                "evals": eval_count,
+                "best_score": current_best_score,
+                "time": time.monotonic() - t0,
+            }
+        )
 
         # Optimization - commit entire path
         if len(best_region) == desired_length:
@@ -109,9 +118,16 @@ def build_region_greedy_lookahead(
             replacement_image=ctx.replacement_image,
             target_class_idx=ctx.target_class_idx,
             batch_size=1,
+            original_log_odds=ctx.original_log_odds,
         )[0]
         eval_count += 1
-        trajectory.append({"evals": eval_count, "best_score": current_best_score})
+        trajectory.append(
+            {
+                "evals": eval_count,
+                "best_score": current_best_score,
+                "time": time.monotonic() - t0,
+            }
+        )
 
     return RegionResult(
         region=current_region,

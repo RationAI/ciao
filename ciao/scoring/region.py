@@ -71,15 +71,27 @@ def _apply_masks(
     )
 
 
+def log_odds_for_class(logits: torch.Tensor, target_class_idx: int) -> torch.Tensor:
+    """Return log(p_c / (1 - p_c)) for the target class across a batch.
+
+    Computed in the numerically stable form ``z_c - logsumexp_{j != c}(z_j)``.
+    """
+    target_logit = logits[:, target_class_idx]
+    others = logits.clone()
+    others[:, target_class_idx] = float("-inf")
+    return target_logit - torch.logsumexp(others, dim=1)
+
+
 def _compute_batch_deltas(
     predictor: ModelPredictor,
     batch_inputs: torch.Tensor,
-    original_logit: torch.Tensor,
+    original_log_odds: torch.Tensor,
     target_class_idx: int,
 ) -> list[float]:
-    """Run inference and return per-sample delta scores."""
-    masked_logits = predictor.get_class_logit_batch(batch_inputs, target_class_idx)
-    deltas_tensor = original_logit - masked_logits
+    """Run inference and return per-sample log-odds drops vs the unmasked baseline."""
+    masked_logits = predictor.get_logits(batch_inputs)
+    masked_log_odds = log_odds_for_class(masked_logits, target_class_idx)
+    deltas_tensor = original_log_odds - masked_log_odds
     return deltas_tensor.tolist()
 
 
@@ -90,9 +102,19 @@ def calculate_region_deltas(
     segment_sets: Sequence[Set[int]],
     replacement_image: torch.Tensor,
     target_class_idx: int,
+    original_log_odds: torch.Tensor,
     batch_size: int = 64,
 ) -> list[float]:
-    """Calculate masking deltas for region candidates using batched inference.
+    """Calculate per-region log-odds drops using batched inference.
+
+    For each candidate region, the model is evaluated on the input with that
+    region masked out, and the score returned is
+
+        original_log_odds - masked_log_odds
+
+    where log-odds is ``log(p_c / (1 - p_c))`` for the target class. Positive
+    deltas mean masking the region weakened the model's belief in the target
+    class relative to its competitors.
 
     Args:
         predictor: ModelPredictor instance
@@ -101,10 +123,11 @@ def calculate_region_deltas(
         segment_sets: List of segment ID sets, e.g. [{1,2,3}, {4,5,6}]
         replacement_image: Replacement tensor [C, H, W]
         target_class_idx: Target class index
+        original_log_odds: Pre-computed unmasked target-class log-odds (scalar tensor)
         batch_size: Batch size for internal batching
 
     Returns:
-        Delta scores for each candidate
+        Log-odds drop scores for each candidate
     """
     if not segment_sets:
         return []
@@ -114,11 +137,6 @@ def calculate_region_deltas(
     )
 
     with torch.no_grad():
-        # Keep original_logit as a tensor to maintain vectorized operations
-        original_logit = predictor.get_class_logit_batch(input_batch, target_class_idx)[
-            0
-        ]
-
         all_deltas: list[float] = []
         num_masks = len(segment_sets)
 
@@ -131,7 +149,7 @@ def calculate_region_deltas(
             )
             batch_inputs = _apply_masks(input_batch, mask_tensor, replacement_image)
             deltas = _compute_batch_deltas(
-                predictor, batch_inputs, original_logit, target_class_idx
+                predictor, batch_inputs, original_log_odds, target_class_idx
             )
             all_deltas.extend(deltas)
 
