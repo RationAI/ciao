@@ -64,11 +64,11 @@ def imagenet_mean_replacement(image: torch.Tensor) -> torch.Tensor:
     """
     _, height, width = image.shape
 
-    imagenet_mean = IMAGENET_MEAN.view(3, 1, 1).to(
+    normalized_mean = torch.zeros(
+        (3, 1, 1),
         device=image.device,
         dtype=image.dtype,
     )
-    normalized_mean = torch.zeros_like(imagenet_mean)
     return normalized_mean.expand(-1, height, width)
 
 
