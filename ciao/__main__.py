@@ -210,6 +210,7 @@ def main(cfg: DictConfig) -> None:
                     predictor=predictor,
                     target_class_idx=cfg.target_class_idx,
                     max_regions=cfg.max_regions,
+                    sigma=cfg.sigma,
                     desired_length=cfg.desired_length,
                     batch_size=cfg.batch_size,
                     segmentation=segmentation,

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import torch
 
-from ciao.algorithm.builder import build_all_regions
+from ciao.algorithm.builder import SeedSelectionMode, build_all_regions
 from ciao.data.preprocessing import load_and_preprocess_image
 from ciao.model.predictor import ModelPredictor
 from ciao.scoring.region import RegionResult, log_odds_for_class
@@ -46,6 +46,7 @@ class CIAOExplainer:
         replacement: ReplacementFn,
         target_class_idx: int | None = None,
         max_regions: int = 10,
+        sigma: SeedSelectionMode = None,
         desired_length: int = 30,
         batch_size: int = 64,
     ) -> ExplanationResult:
@@ -59,6 +60,9 @@ class CIAOExplainer:
             replacement: Replacement strategy function generating an obfuscation mask.
             target_class_idx: Target class to explain (None = auto-select)
             max_regions: Maximum number of regions to build
+            sigma: Seed selection mode for the outer region builder. ``None``
+                picks max abs score and then inherits its sign, ``1`` targets positive evidence,
+                ``-1`` targets negative evidence.
             desired_length: Target number of segments per region (default=30)
             batch_size: Batch size for model evaluation
 
@@ -160,6 +164,7 @@ class CIAOExplainer:
             scores=segment_scores,
             max_regions=max_regions,
             original_prob=original_prob,
+            sigma=sigma,
             desired_length=desired_length,
             batch_size=batch_size,
         )
