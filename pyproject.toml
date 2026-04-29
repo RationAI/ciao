@@ -20,6 +20,7 @@ dependencies = [
     "matplotlib>=3.5.0",
     "plotly>=5.0.0",
     "ipywidgets>=7.0.0",
+    "captum>=0.7.0",
 
     # Image processing and segmentation
     "scikit-image>=0.19.0",
@@ -34,6 +35,8 @@ dependencies = [
 
 [project.scripts]
 ciao = "ciao.__main__:main"
+ciao-ep = "ciao.baselines.extremal.__main__:main"
+ciao-lime = "ciao.baselines.lime.__main__:main"
 
 [dependency-groups]
 dev = ["mypy", "ruff"]
