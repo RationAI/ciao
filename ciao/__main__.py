@@ -75,14 +75,23 @@ def _log_trajectory(run_id: str, results: ExplanationResult) -> None:
     """Batch-log per-region trajectory points to MLflow."""
     ts_ms = int(time.time() * 1000)
     trajectory_metrics = [
-        Metric(
-            key=f"region_{idx}/trajectory_best_score",
-            value=item["best_score"],
-            timestamp=ts_ms,
-            step=int(item["evals"]),
-        )
+        metric
         for idx, region in enumerate(results.regions)
         for item in region.trajectory
+        for metric in (
+            Metric(
+                key=f"region_{idx}/trajectory_best_score",
+                value=item["best_score"],
+                timestamp=ts_ms,
+                step=int(item["evals"]),
+            ),
+            Metric(
+                key=f"region_{idx}/trajectory_time",
+                value=item["time"],
+                timestamp=ts_ms,
+                step=int(item["evals"]),
+            ),
+        )
     ]
     if not trajectory_metrics:
         return
