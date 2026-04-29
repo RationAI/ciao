@@ -24,6 +24,7 @@ Selection details (per outgoing edge of a fully-expanded node):
 
 import math
 import random
+import time
 
 from tqdm import tqdm
 
@@ -276,6 +277,7 @@ def build_region_mcgs(
 
     eval_count = 0
     trajectory: list[dict[str, float]] = []
+    t0 = time.monotonic()
 
     for _ in tqdm(range(num_iterations), desc="MCGS", unit="iter"):
         # --- SELECTION + EXPANSION ---
@@ -314,7 +316,13 @@ def build_region_mcgs(
                 best_score = reward
                 best_region = region
 
-        trajectory.append({"evals": eval_count, "best_score": best_score})
+        trajectory.append(
+            {
+                "evals": eval_count,
+                "best_score": best_score,
+                "time": time.monotonic() - t0,
+            }
+        )
 
         # --- BACKUP ---
         backup_path(path, actions, rewards)
