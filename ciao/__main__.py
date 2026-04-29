@@ -77,7 +77,9 @@ def _log_trajectory(run_id: str, results: ExplanationResult) -> None:
     trajectory_metrics = [
         metric
         for idx, region in enumerate(results.regions)
-        for item in region.trajectory
+        # Deduplicate by evals: multiple iterations may share the same eval_count
+        # (e.g. cached terminal hits in MCGS), which would violate MLflow's metric PK.
+        for item in {item["evals"]: item for item in region.trajectory}.values()
         for metric in (
             Metric(
                 key=f"region_{idx}/trajectory_best_score",
