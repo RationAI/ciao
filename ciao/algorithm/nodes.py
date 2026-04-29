@@ -1,4 +1,4 @@
-"""Node classes for MCGS search structure."""
+"""Node classes for MCGS and MCTS search structures."""
 
 import math
 from dataclasses import dataclass
@@ -27,7 +27,6 @@ class MCGSNode:
         self.region = region
         self.children: dict[int, MCGSNode] = {}
         self.edge_stats: dict[int, EdgeStats] = {}
-
         self.visits = 0
         self.mean_value = 0.0
         self.max_value = -math.inf
@@ -36,3 +35,12 @@ class MCGSNode:
         # Only updated when this node is the simulation leaf, not when traversed.
         self._own_visits: int = 0
         self._own_value_sum: float = 0.0
+
+
+class MCTSNode:
+    def __init__(self, region: frozenset[int]):
+        self.region = region
+        self.children: dict[int, MCTSNode] = {}
+        self.visits = 0
+        self.mean_value = 0.0
+        self.max_value = -math.inf
