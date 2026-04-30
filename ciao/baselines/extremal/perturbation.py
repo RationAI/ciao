@@ -53,6 +53,7 @@ def extremal_perturbation(
     mask_sigma: float = 21.0,
     area_lambda: float = 300.0,
     area_lambda_growth: float = 1.0035,
+    jitter: bool = True,
     trajectory_log_every: int = 10,
 ) -> EPResult:
     """Run extremal-perturbation preservation-game optimization.
@@ -73,6 +74,9 @@ def extremal_perturbation(
         area_lambda: Weight on the area-constraint penalty.
         area_lambda_growth: Per-iteration multiplicative growth of
             ``area_lambda`` (TorchRay-style annealing).
+        jitter: If True, horizontally flip the perturbed input on alternating
+            iterations. Breaks the zero-padding / corner-bias artifact that
+            otherwise pushes the mask to image edges.
         trajectory_log_every: Append a trajectory point every N iterations.
 
     Returns:
@@ -103,11 +107,13 @@ def extremal_perturbation(
     try:
         h_lo = math.ceil(height / mask_step)
         w_lo = math.ceil(width / mask_step)
-        # Initialize at 0.5 so sigmoid-free upsampling gives a roughly
-        # half-everywhere mask.
-        pmask = torch.full(
+        # Initialize at 1.0 (preserve everything) so the area penalty shrinks
+        # the mask away from the *least useful* regions, driven by real model
+        # gradients. Starting from 0.5 gives a half-blurred input where
+        # gradients are tiny and noisy, and the mask drifts to image corners
+        # exploiting zero-padding artifacts instead of finding salient pixels.
+        pmask = torch.ones(
             (1, 1, h_lo, w_lo),
-            0.5,
             device=device,
             dtype=input_batch.dtype,
             requires_grad=True,
@@ -145,6 +151,12 @@ def extremal_perturbation(
 
             # Preservation: keep mask*x, replace (1-mask) with replacement.
             x_pert = mask_full * input_batch + (1.0 - mask_full) * repl
+
+            # Horizontal flip on alternating iterations breaks the
+            # zero-padding / positional-bias exploit that otherwise pushes
+            # the mask to a fixed image corner.
+            if jitter and t % 2 == 0:
+                x_pert = torch.flip(x_pert, dims=(3,))
 
             logits = model(x_pert)
             log_probs = F.log_softmax(logits, dim=1)
