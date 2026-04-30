@@ -3,9 +3,11 @@
 Uses set for regions.
 """
 
+import time
 from collections.abc import Set
 
 from ciao.algorithm.context import SearchContext
+from ciao.algorithm.search_helpers import evaluate_and_cache
 from ciao.scoring.region import RegionResult, calculate_region_deltas
 
 
@@ -20,7 +22,9 @@ def build_region_potential(
         num_simulations: Monte Carlo samples per frontier node per iteration
 
     Returns:
-        RegionResult with region, score, and statistics
+        RegionResult with region, score, and statistics. The returned region is
+        the best-scoring region encountered during the search (across all rollouts
+        and committed states), not necessarily the final committed region.
     """
     used_segments = set(ctx.used_segments)
 
@@ -33,6 +37,9 @@ def build_region_potential(
     eval_count = 0
     trajectory: list[dict[str, float]] = []
     best_signed = -float("inf")
+    best_region: frozenset[int] = curr_region
+    best_raw_score: float = 0.0
+    t0 = time.monotonic()
 
     # Main loop: Grow region until target length
     while len(curr_region) < ctx.desired_length:
@@ -43,7 +50,7 @@ def build_region_potential(
             break
 
         # Phase 1: Sampling - Monte Carlo exploration from each frontier node
-        potentials, new_evals = sampling_phase(
+        potentials, new_evals, step_best = sampling_phase(
             curr_region=curr_region,
             current_frontier=current_frontier,
             num_simulations=num_simulations,
@@ -53,13 +60,19 @@ def build_region_potential(
         )
         eval_count += new_evals
 
-        if evaluated_scores:
-            step_best = max(
-                s * ctx.optimization_sign for s in evaluated_scores.values()
+        if step_best is not None:
+            signed, region, raw = step_best
+            if signed > best_signed:
+                best_signed = signed
+                best_region = region
+                best_raw_score = raw
+            trajectory.append(
+                {
+                    "evals": eval_count,
+                    "best_score": best_signed,
+                    "time": time.monotonic() - t0,
+                }
             )
-            if step_best > best_signed:
-                best_signed = step_best
-            trajectory.append({"evals": eval_count, "best_score": best_signed})
 
         # Phase 2: Selection - Choose best frontier node by potential
         valid_nodes = [n for n in potentials if potentials[n]]
@@ -71,10 +84,10 @@ def build_region_potential(
         # Commit: Add winner to region structure
         curr_region = curr_region | {winner}
 
-    # Fetch final score from cache, or evaluate if loop never ran
-    final_score = evaluated_scores.get(frozenset(curr_region))
-    if final_score is None:
-        final_score = calculate_region_deltas(
+    # If the loop never produced any evaluation (e.g. immediate dead end),
+    # score the seed-only region so we have something to return.
+    if best_signed == -float("inf"):
+        score = calculate_region_deltas(
             predictor=ctx.predictor,
             input_batch=ctx.input_batch,
             segments=ctx.image_graph.segments,
@@ -85,14 +98,20 @@ def build_region_potential(
             batch_size=ctx.batch_size,
         )[0]
         eval_count += 1
-        signed_final = final_score * ctx.optimization_sign
-        if signed_final > best_signed:
-            best_signed = signed_final
-        trajectory.append({"evals": eval_count, "best_score": best_signed})
+        best_signed = score * ctx.optimization_sign
+        best_region = curr_region
+        best_raw_score = score
+        trajectory.append(
+            {
+                "evals": eval_count,
+                "best_score": best_signed,
+                "time": time.monotonic() - t0,
+            }
+        )
 
     return RegionResult(
-        region=curr_region,
-        score=final_score,
+        region=best_region,
+        score=best_raw_score,
         evaluations_count=eval_count,
         trajectory=trajectory,
     )
@@ -105,7 +124,11 @@ def sampling_phase(
     ctx: SearchContext,
     used_segments: Set[int],
     evaluated_scores: dict[frozenset[int], float],
-) -> tuple[dict[int, list[float]], int]:
+) -> tuple[
+    dict[int, list[float]],
+    int,
+    tuple[float, frozenset[int], float] | None,
+]:
     """Monte Carlo Sampling Phase: Explore expansions and populate potential cache.
 
     For each frontier node n:
@@ -125,7 +148,9 @@ def sampling_phase(
 
     Returns:
         Tuple of (mapping from frontier node ID to a list of evaluated scores
-        for expansions containing that node, number of new NN evaluations performed).
+        for expansions containing that node, number of new NN evaluations
+        performed, optional (signed_score, region, raw_score) for the best
+        region observed across the cache after this step).
     """
     regions_to_evaluate: list[frozenset[int]] = []
     # Maps expansion_region -> which frontier nodes it contains
@@ -154,41 +179,33 @@ def sampling_phase(
                 regions_to_evaluate.append(sampled_region)
 
     if not region_to_frontier_hits:
-        return {}, 0
+        return {}, 0, None
 
     # --- Batch Evaluation: Score all unique expansions ---
-    if regions_to_evaluate:
-        scores = calculate_region_deltas(
-            predictor=ctx.predictor,
-            input_batch=ctx.input_batch,
-            segments=ctx.image_graph.segments,
-            replacement_image=ctx.replacement_image,
-            segment_sets=regions_to_evaluate,
-            target_class_idx=ctx.target_class_idx,
-            original_log_odds=ctx.original_log_odds,
-            batch_size=ctx.batch_size,
-        )
-
-        for region, score in zip(regions_to_evaluate, scores, strict=True):
-            evaluated_scores[region] = score
+    new_evals = evaluate_and_cache(regions_to_evaluate, evaluated_scores, ctx)
 
     # --- Distribution to Potentials ---
     potentials: dict[int, list[float]] = {}
+    best_signed = -float("inf")
+    best_region: frozenset[int] | None = None
+    best_raw: float = 0.0
     for frozen_region, hits in region_to_frontier_hits.items():
         score = evaluated_scores[frozen_region]
         signed_score = score * ctx.optimization_sign
+
+        if signed_score > best_signed:
+            best_signed = signed_score
+            best_region = frozen_region
+            best_raw = score
 
         # Distribute to all neighbors in the hit set
         for neighbor_id in hits:
             potentials.setdefault(neighbor_id, []).append(signed_score)
 
-    return potentials, len(regions_to_evaluate)
+    step_best = (
+        (best_signed, best_region, best_raw) if best_region is not None else None
+    )
+    return potentials, new_evals, step_best
 
 
 # TODO: maybe add fixed num_simulations for the whole iterations? So that I can control it? (keep as TODO, maybe later)
-
-# TODO: add an option to do UCB instead of the potentials (but with batching - another hyperparam)
-
-# TODO: shouldn't we track the trajectory more precisely? Inside the sampling phase?
-
-# TODO: keep track of the best score, maybe some cache? use the evaluated_scores and do sth like redistribute_history to the best neighbor? So that after adding one segment, we already can use some of the information we already had?
