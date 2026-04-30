@@ -188,5 +188,6 @@ class ExtremalPerturbationExplainer:
             segment_scores=segment_scores,
             regions=[region_result],
             replacement_image=replacement_image,
+            soft_mask=ep_result.soft_mask,
         )
         return explanation, ep_result
