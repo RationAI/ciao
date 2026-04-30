@@ -48,9 +48,10 @@ def extremal_perturbation(
     area: float = 0.1,
     max_time: float = 60.0,
     max_iterations: int = 800,
-    learning_rate: float = 0.05,
+    learning_rate: float = 0.01,
+    momentum: float = 0.9,
     mask_step: int = 7,
-    mask_sigma: float = 21.0,
+    mask_sigma: float = 11.0,
     area_lambda: float = 300.0,
     area_lambda_growth: float = 1.0035,
     jitter: bool = True,
@@ -67,7 +68,8 @@ def extremal_perturbation(
         max_time: Wall-clock budget in seconds. Optimization stops at the
             first iteration boundary after the budget is exceeded.
         max_iterations: Hard cap on optimization iterations.
-        learning_rate: Adam learning rate.
+        learning_rate: SGD learning rate.
+        momentum: SGD momentum (also used as dampening, TorchRay-style).
         mask_step: Spatial downsampling factor for the parameter mask.
         mask_sigma: Sigma (in upsampled pixels) of Gaussian smoothing applied
             to the mask each iteration.
@@ -107,19 +109,25 @@ def extremal_perturbation(
     try:
         h_lo = math.ceil(height / mask_step)
         w_lo = math.ceil(width / mask_step)
-        # Initialize at 1.0 (preserve everything) so the area penalty shrinks
-        # the mask away from the *least useful* regions, driven by real model
-        # gradients. Starting from 0.5 gives a half-blurred input where
-        # gradients are tiny and noisy, and the mask drifts to image corners
-        # exploiting zero-padding artifacts instead of finding salient pixels.
-        pmask = torch.ones(
+        # Init with uniform random noise in [0, 1]. A perfectly uniform init
+        # (e.g. all-ones or all-0.5) gets blurred to a near-uniform mask,
+        # which causes torch.sort's stable tie-breaking to fall back on
+        # row-major flatten order — and that consistently pushes the kept
+        # region toward the bottom of the image (the last positions in the
+        # flatten). Random init breaks ties without spatial bias.
+        pmask = torch.rand(
             (1, 1, h_lo, w_lo),
             device=device,
             dtype=input_batch.dtype,
-            requires_grad=True,
         )
+        pmask.requires_grad_(True)
 
-        optimizer = torch.optim.Adam([pmask], lr=learning_rate)
+        # SGD+momentum (TorchRay default). Adam's per-parameter adaptive
+        # learning rates can amplify tiny initial asymmetries before the
+        # target_log_prob signal kicks in.
+        optimizer = torch.optim.SGD(
+            [pmask], lr=learning_rate, momentum=momentum, dampening=momentum
+        )
 
         kernel_size = _sigma_to_kernel_size(mask_sigma) if mask_sigma > 0 else 0
 
