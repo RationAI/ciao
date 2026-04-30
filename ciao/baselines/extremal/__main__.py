@@ -66,6 +66,7 @@ def main(cfg: DictConfig) -> None:
                     max_time=cfg.ep.max_time,
                     max_iterations=cfg.ep.max_iterations,
                     learning_rate=cfg.ep.learning_rate,
+                    momentum=cfg.ep.momentum,
                     mask_step=cfg.ep.mask_step,
                     mask_sigma=cfg.ep.mask_sigma,
                     area_lambda=cfg.ep.area_lambda,
