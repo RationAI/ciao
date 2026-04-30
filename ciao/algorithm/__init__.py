@@ -6,6 +6,7 @@ from ciao.algorithm.graph import ImageGraph
 from ciao.algorithm.lookahead import build_region_greedy_lookahead
 from ciao.algorithm.potential import build_region_potential
 from ciao.algorithm.search_helpers import is_terminal
+from ciao.algorithm.ucb import build_region_ucb
 
 
 __all__ = [
@@ -14,5 +15,6 @@ __all__ = [
     "build_all_regions",
     "build_region_greedy_lookahead",
     "build_region_potential",
+    "build_region_ucb",
     "is_terminal",
 ]

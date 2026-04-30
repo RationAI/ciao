@@ -51,3 +51,43 @@ def make_potential_method(num_simulations: int = 10) -> ExplanationMethodFn:
         )
 
     return method
+
+
+def make_ucb_method(
+    step_budget: int = 64,
+    batch_size: int = 16,
+    ucb_c: float = 1.0,
+    ucb_alpha: float = 0.5,
+) -> ExplanationMethodFn:
+    """Return a function that builds regions via asynchronous-batched UCB.
+
+    Args:
+        step_budget: Total rollouts per commit step.
+        batch_size: Rollouts gathered per GPU evaluation pass.
+        ucb_c: Exploration constant for the UCB1 bonus term.
+        ucb_alpha: Blend weight ``alpha * max + (1 - alpha) * mean`` for the
+            exploitation term.
+
+    Returns:
+        ExplanationMethodFn: Method computing contextual importance via UCB search.
+    """
+    if step_budget < 1:
+        raise ValueError(f"step_budget must be >= 1, got {step_budget}")
+    if batch_size < 1:
+        raise ValueError(f"batch_size must be >= 1, got {batch_size}")
+    if not 0.0 <= ucb_alpha <= 1.0:
+        raise ValueError(f"ucb_alpha must be in [0, 1], got {ucb_alpha}")
+
+    def method(ctx: SearchContext) -> RegionResult:
+        """Find the region via asynchronous-batched UCB."""
+        from ciao.algorithm.ucb import build_region_ucb
+
+        return build_region_ucb(
+            ctx=ctx,
+            step_budget=step_budget,
+            batch_size=batch_size,
+            ucb_c=ucb_c,
+            ucb_alpha=ucb_alpha,
+        )
+
+    return method
