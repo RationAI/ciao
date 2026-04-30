@@ -71,6 +71,7 @@ class ExtremalPerturbationExplainer:
         mask_sigma: float = 21.0,
         area_lambda: float = 300.0,
         area_lambda_growth: float = 1.0035,
+        jitter: bool = True,
         batch_size: int = 64,
     ) -> tuple[ExplanationResult, EPResult]:
         # Validation
@@ -128,6 +129,7 @@ class ExtremalPerturbationExplainer:
             mask_sigma=mask_sigma,
             area_lambda=area_lambda,
             area_lambda_growth=area_lambda_growth,
+            jitter=jitter,
         )
 
         # Discretize: top-area fraction of pixels = kept region.

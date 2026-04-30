@@ -21,3 +21,4 @@ ep:
   mask_sigma: 21.0             # Gaussian smoothing sigma applied to the mask
   area_lambda: 300.0           # initial area-penalty weight
   area_lambda_growth: 1.0035   # per-iteration growth factor
+  jitter: true                 # h-flip every other iter to break corner-bias
