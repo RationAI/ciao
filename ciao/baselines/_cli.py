@@ -12,7 +12,12 @@ import numpy as np
 import torch
 from mlflow.entities import Metric
 
-from ciao.visualization import plot_overview, plot_region_scores, plot_regions
+from ciao.visualization import (
+    plot_overview,
+    plot_region_scores,
+    plot_regions,
+    plot_soft_mask,
+)
 
 
 if TYPE_CHECKING:
@@ -141,6 +146,11 @@ def log_figures(results: ExplanationResult) -> None:
     ):
         fig = plot_fn(results)
         mlflow.log_figure(fig, f"figures/{name}.png")
+        plt.close(fig)
+
+    if results.soft_mask is not None:
+        fig = plot_soft_mask(results)
+        mlflow.log_figure(fig, "figures/soft_mask.png")
         plt.close(fig)
 
 

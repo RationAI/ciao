@@ -27,6 +27,11 @@ def _to_hwc(tensor: torch.Tensor) -> np.ndarray:
     return np.clip(img * _IMAGENET_STD + _IMAGENET_MEAN, 0.0, 1.0)
 
 
+def _to_hw(mask: torch.Tensor) -> np.ndarray:
+    """Convert a soft mask tensor to a displayable float32 [H, W] array."""
+    return mask.detach().squeeze().cpu().float().numpy()
+
+
 def _segment_boundaries(segments: np.ndarray) -> np.ndarray:
     """Return a boolean [H, W] mask that is True on segment edges."""
     h_edge = np.pad(segments[:-1] != segments[1:], ((0, 1), (0, 0)))
@@ -125,4 +130,27 @@ def plot_region_scores(result: ExplanationResult) -> Figure:
         ax.axis("off")
 
     fig.tight_layout(pad=0)
+    return fig
+
+
+def plot_soft_mask(result: ExplanationResult) -> Figure:
+    """Show the EP soft mask as a standalone heatmap and an overlay."""
+    if result.soft_mask is None:
+        raise ValueError("soft_mask is not available for this explanation")
+
+    img = _to_hwc(result.input_batch)
+    mask = _to_hw(result.soft_mask)
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+
+    axes[0].imshow(mask, cmap="magma", vmin=0.0, vmax=1.0)
+    axes[0].set_title("soft mask")
+    axes[0].axis("off")
+
+    axes[1].imshow(img)
+    axes[1].imshow(mask, cmap="magma", vmin=0.0, vmax=1.0, alpha=0.6)
+    axes[1].set_title("soft mask overlay")
+    axes[1].axis("off")
+
+    fig.tight_layout(pad=0.5)
     return fig

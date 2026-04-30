@@ -28,6 +28,7 @@ class ExplanationResult:
     segment_scores: dict[int, float]  # Segment ID -> score
     regions: list[RegionResult]
     replacement_image: torch.Tensor
+    soft_mask: torch.Tensor | None = None
 
 
 class CIAOExplainer:
