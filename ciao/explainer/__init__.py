@@ -5,6 +5,7 @@ from ciao.explainer.explanation_methods import (
     make_lookahead_method,
     make_mcgs_method,
     make_mcts_method,
+    make_potential_method,
 )
 from ciao.typing import ExplanationMethodFn
 
@@ -15,4 +16,5 @@ __all__ = [
     "make_lookahead_method",
     "make_mcgs_method",
     "make_mcts_method",
+    "make_potential_method",
 ]
