@@ -6,64 +6,97 @@ from ciao.scoring.region import RegionResult, calculate_region_deltas
 
 def build_region_pure_monte_carlo(
     ctx: SearchContext,
-    num_simulations: int,
+    num_evals: int,
+    patience: int | None = None,
 ) -> RegionResult:
     """Build a region via random sampling from the seed and pick the best sample.
 
+    Samples connected supersets one at a time, deduplicating against previously
+    sampled regions. Once ``ctx.batch_size`` new uniques have accumulated, they
+    are scored together and a trajectory point is recorded. Sampling stops when
+    ``num_evals`` unique regions have been scored, or when ``patience``
+    consecutive samples yield only duplicates.
+
     Args:
         ctx: Search context with model state and search parameters.
-        num_simulations: Number of random connected supersets to sample.
+        num_evals: Target number of unique regions to score.
+        patience: Stop early after this many consecutive duplicate samples.
+            Defaults to ``num_evals`` (effectively disabled).
 
     Returns:
         RegionResult containing the best sampled region and its score.
     """
-    if num_simulations < 1:
-        raise ValueError(f"num_simulations must be >= 1, got {num_simulations}")
+    if num_evals < 1:
+        raise ValueError(f"num_evals must be >= 1, got {num_evals}")
+    if patience is None:
+        patience = num_evals
+    if patience < 1:
+        raise ValueError(f"patience must be >= 1, got {patience}")
 
     seed_region = frozenset({ctx.seed_idx})
-    sampled_regions = [
-        ctx.image_graph.sample_connected_superset(
+    batch_size = ctx.batch_size
+
+    seen: dict[frozenset[int], None] = {}
+    pending: list[frozenset[int]] = []
+    scores: list[float] = []
+    signed_scores: list[float] = []
+    trajectory: list[dict[str, float]] = []
+    best_signed = -float("inf")
+    consecutive_duplicates = 0
+
+    def flush_pending() -> None:
+        nonlocal best_signed
+        if not pending:
+            return
+        batch_scores = calculate_region_deltas(
+            predictor=ctx.predictor,
+            input_batch=ctx.input_batch,
+            segments=ctx.image_graph.segments,
+            replacement_image=ctx.replacement_image,
+            segment_sets=pending,
+            target_class_idx=ctx.target_class_idx,
+            original_log_odds=ctx.original_log_odds,
+            batch_size=batch_size,
+        )
+        scores.extend(batch_scores)
+        for s in batch_scores:
+            signed_scores.append(s * ctx.optimization_sign)
+        best_signed = max(best_signed, max(signed_scores[-len(batch_scores) :]))
+        trajectory.append({"evals": len(scores), "best_score": best_signed})
+        pending.clear()
+
+    while len(seen) < num_evals and consecutive_duplicates < patience:
+        region = ctx.image_graph.sample_connected_superset(
             base_region=seed_region,
             target_length=ctx.desired_length,
             used_segments=ctx.used_segments,
         )
-        for _ in range(num_simulations)
-    ]
-    # TODO: change so that we sample while num of unique regions < num_simulations
-    # maybe rename num_simulations to sth like target_evals
-    # add a parameter for patience - if we already found `patience` duplicates, stop with simulations. Probably hyperparam
+        if region in seen:
+            consecutive_duplicates += 1
+            continue
+        seen[region] = None
+        pending.append(region)
+        consecutive_duplicates = 0
+        if len(pending) >= batch_size:
+            flush_pending()
 
-    unique_regions = list(dict.fromkeys(sampled_regions))
-    if not unique_regions:
-        unique_regions = [seed_region]
+    # Score any leftover uniques that didn't fill a full batch before the loop exited.
+    flush_pending()
 
-    # TODO: evaluate in batches - I want the trajectory to be realistic, not just one number
-    # so maybe even add it to the sampling while cycle and every batch_size times call this function
-    scores = calculate_region_deltas(
-        predictor=ctx.predictor,
-        input_batch=ctx.input_batch,
-        segments=ctx.image_graph.segments,
-        replacement_image=ctx.replacement_image,
-        segment_sets=unique_regions,
-        target_class_idx=ctx.target_class_idx,
-        original_log_odds=ctx.original_log_odds,
-        batch_size=ctx.batch_size,
-    )
+    if not scores:
+        return RegionResult(
+            region=seed_region,
+            score=0.0,
+            evaluations_count=0,
+            trajectory=trajectory,
+        )
 
-    signed_scores = [s * ctx.optimization_sign for s in scores]
-
-    best_signed = -float("inf")
-    trajectory: list[dict[str, float]] = []
-    for idx, signed in enumerate(signed_scores, start=1):
-        if signed > best_signed:
-            best_signed = signed
-        trajectory.append({"evals": idx, "best_score": best_signed})
-
+    unique_regions = list(seen.keys())
     best_idx = max(range(len(signed_scores)), key=lambda i: signed_scores[i])
 
     return RegionResult(
         region=unique_regions[best_idx],
         score=scores[best_idx],
-        evaluations_count=len(unique_regions),
+        evaluations_count=len(scores),
         trajectory=trajectory,
     )
