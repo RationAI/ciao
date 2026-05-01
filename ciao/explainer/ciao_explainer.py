@@ -8,7 +8,12 @@ import torch
 from ciao.algorithm.builder import SeedSelectionMode, build_all_regions
 from ciao.data.preprocessing import load_and_preprocess_image
 from ciao.model.predictor import ModelPredictor
-from ciao.scoring.region import RegionResult, log_odds_for_class
+from ciao.scoring.region import (
+    RegionResult,
+    calculate_region_deltas,
+    calculate_region_probability_drops,
+    log_odds_for_class,
+)
 from ciao.scoring.segments import (
     calculate_segment_scores,
     create_surrogate_dataset,
@@ -28,6 +33,8 @@ class ExplanationResult:
     segment_scores: dict[int, float]  # Segment ID -> score
     regions: list[RegionResult]
     replacement_image: torch.Tensor
+    combined_score: float | None = None
+    combined_probability_drop: float | None = None
 
 
 class CIAOExplainer:
@@ -169,6 +176,36 @@ class CIAOExplainer:
             batch_size=batch_size,
         )
 
+        combined_score: float | None = None
+        combined_probability_drop: float | None = None
+        if len(regions) == 1:
+            combined_score = regions[0].score
+            combined_probability_drop = regions[0].probability_drop
+        elif len(regions) > 1:
+            union = frozenset().union(*[r.region for r in regions])
+            combined_score = calculate_region_deltas(
+                predictor=predictor,
+                input_batch=input_batch,
+                segments=image_graph.segments,
+                segment_sets=[union],
+                replacement_image=replacement_image,
+                target_class_idx=target_class_idx,
+                original_log_odds=original_log_odds_tensor,
+                batch_size=batch_size,
+            )[0]
+            temp = RegionResult(region=union, score=0.0)
+            calculate_region_probability_drops(
+                predictor=predictor,
+                input_batch=input_batch,
+                segments=image_graph.segments,
+                replacement_image=replacement_image,
+                target_class_idx=target_class_idx,
+                original_prob=original_prob,
+                results=[temp],
+                batch_size=batch_size,
+            )
+            combined_probability_drop = temp.probability_drop
+
         class_name = class_names[target_class_idx]
 
         return ExplanationResult(
@@ -180,4 +217,6 @@ class CIAOExplainer:
             class_name=class_name,
             replacement_image=replacement_image,
             original_log_odds=original_log_odds,
+            combined_score=combined_score,
+            combined_probability_drop=combined_probability_drop,
         )

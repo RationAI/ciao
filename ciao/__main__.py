@@ -142,6 +142,17 @@ def _log_explanation_results(
             f"region_{idx}/segments.json",
         )
 
+    if (
+        results.combined_score is not None
+        and results.combined_probability_drop is not None
+    ):
+        mlflow.log_metrics(
+            {
+                "all_regions/final_score": results.combined_score,
+                "all_regions/probability_drop": results.combined_probability_drop,
+            }
+        )
+
     _log_trajectory(run_id, results)
 
     mlflow.log_metric("time_seconds", elapsed)
