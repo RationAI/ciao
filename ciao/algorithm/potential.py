@@ -13,13 +13,13 @@ from ciao.scoring.region import RegionResult, calculate_region_deltas
 
 def build_region_potential(
     ctx: SearchContext,
-    num_simulations: int,
+    step_budget: int,
 ) -> RegionResult:
     """Build a region using Sequential Monte Carlo with Potential-based Selection.
 
     Args:
         ctx: Search context
-        num_simulations: Monte Carlo samples per frontier node per iteration
+        step_budget: Maximum number of rollouts per commit step (same semantics as UCB)
 
     Returns:
         RegionResult with region, score, and statistics. The returned region is
@@ -53,7 +53,7 @@ def build_region_potential(
         potentials, new_evals, step_best = sampling_phase(
             curr_region=curr_region,
             current_frontier=current_frontier,
-            num_simulations=num_simulations,
+            step_budget=step_budget,
             ctx=ctx,
             used_segments=used_segments,
             evaluated_scores=evaluated_scores,
@@ -120,7 +120,7 @@ def build_region_potential(
 def sampling_phase(
     curr_region: Set[int],
     current_frontier: Set[int],
-    num_simulations: int,
+    step_budget: int,
     ctx: SearchContext,
     used_segments: Set[int],
     evaluated_scores: dict[frozenset[int], float],
@@ -131,17 +131,14 @@ def sampling_phase(
 ]:
     """Monte Carlo Sampling Phase: Explore expansions and populate potential cache.
 
-    For each frontier node n:
-        1. Create extended structure S U {n}
-        2. Run num_simulations random walk expansions from this extended structure
-        3. Evaluate each unique expansion with the model
-        4. Distribute results to cache: For each frontier node that appears in an
-           expansion, record (expansion_region, score) in that node's history
+    Distributes step_budget rollouts across frontier nodes (round-robin), then
+    evaluates unique expansions and scores each frontier node by the potentials
+    of expansions that contain it.
 
     Args:
         curr_region: Current region structure (set-like)
         current_frontier: Frontier nodes (set for hit detection and iteration)
-        num_simulations: Number of random walk simulations per frontier node
+        step_budget: Total number of rollouts for this commit step (same as UCB)
         ctx: Search context containing target length, model state, and evaluation parameters
         used_segments: Set-like wrapper of already-used nodes
         evaluated_scores: Global cache of previously evaluated regions to their scores
@@ -156,27 +153,27 @@ def sampling_phase(
     # Maps expansion_region -> which frontier nodes it contains
     region_to_frontier_hits: dict[frozenset[int], frozenset[int]] = {}
 
-    # --- Sampling Loop: Generate candidate expansions ---
-    for n in current_frontier:
-        # Start with S U {n}
-        extended_region = curr_region | {n}
+    frontier_list = list(current_frontier)
+    extended_regions = {n: frozenset(curr_region | {n}) for n in frontier_list}
 
-        for _ in range(num_simulations):
-            sampled_region = ctx.image_graph.sample_connected_superset(
-                base_region=extended_region,
-                target_length=ctx.desired_length,
-                used_segments=used_segments,
-            )
+    # --- Sampling Loop: Distribute step_budget rollouts round-robin ---
+    for i in range(step_budget):
+        n = frontier_list[i % len(frontier_list)]
+        sampled_region = ctx.image_graph.sample_connected_superset(
+            base_region=extended_regions[n],
+            target_length=ctx.desired_length,
+            used_segments=used_segments,
+        )
 
-            if sampled_region in region_to_frontier_hits:
-                continue
+        if sampled_region in region_to_frontier_hits:
+            continue
 
-            # Bucketization: Which frontier nodes appear in this expansion?
-            hits = sampled_region & current_frontier
-            region_to_frontier_hits[sampled_region] = hits
+        # Bucketization: Which frontier nodes appear in this expansion?
+        hits = sampled_region & current_frontier
+        region_to_frontier_hits[sampled_region] = hits
 
-            if sampled_region not in evaluated_scores:
-                regions_to_evaluate.append(sampled_region)
+        if sampled_region not in evaluated_scores:
+            regions_to_evaluate.append(sampled_region)
 
     if not region_to_frontier_hits:
         return {}, 0, None
@@ -206,6 +203,3 @@ def sampling_phase(
         (best_signed, best_region, best_raw) if best_region is not None else None
     )
     return potentials, new_evals, step_best
-
-
-# TODO: maybe add fixed num_simulations for the whole iterations? So that I can control it? (keep as TODO, maybe later)
