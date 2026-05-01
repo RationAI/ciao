@@ -1,5 +1,7 @@
 """Pure Monte Carlo search for connected image regions."""
 
+import time
+
 from ciao.algorithm.context import SearchContext
 from ciao.scoring.region import RegionResult, calculate_region_deltas
 
@@ -36,6 +38,7 @@ def build_region_pure_monte_carlo(
     seed_region = frozenset({ctx.seed_idx})
     batch_size = ctx.batch_size
 
+    t0 = time.monotonic()
     seen: dict[frozenset[int], None] = {}
     pending: list[frozenset[int]] = []
     scores: list[float] = []
@@ -62,7 +65,13 @@ def build_region_pure_monte_carlo(
         for s in batch_scores:
             signed_scores.append(s * ctx.optimization_sign)
         best_signed = max(best_signed, max(signed_scores[-len(batch_scores) :]))
-        trajectory.append({"evals": len(scores), "best_score": best_signed})
+        trajectory.append(
+            {
+                "evals": len(scores),
+                "best_score": best_signed,
+                "time": time.monotonic() - t0,
+            }
+        )
         pending.clear()
 
     while len(seen) < num_evals and consecutive_duplicates < patience:
