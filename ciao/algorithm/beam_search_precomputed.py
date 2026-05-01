@@ -4,6 +4,8 @@ The search objective uses the initial segment scores only. No neural-network que
 are made during expansion; the selected final region is evaluated once at the end.
 """
 
+import time
+
 from ciao.algorithm.context import SearchContext
 from ciao.scoring.region import RegionResult, calculate_region_deltas
 
@@ -27,6 +29,7 @@ def build_region_beam_search(
     target_length = ctx.desired_length
     used_segments = set(ctx.used_segments)
 
+    t0 = time.monotonic()
     seed_region = frozenset({ctx.seed_idx})
     seed_signed_sum = ctx.optimization_sign * ctx.segment_scores[ctx.seed_idx]
 
@@ -82,5 +85,7 @@ def build_region_beam_search(
         region=best_region,
         score=final_score,
         evaluations_count=1,
-        trajectory=[{"evals": 1, "best_score": signed_final}],
+        trajectory=[
+            {"evals": 1, "best_score": signed_final, "time": time.monotonic() - t0}
+        ],
     )
