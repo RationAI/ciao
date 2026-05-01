@@ -33,8 +33,10 @@ def compute_iou(
     if not union_segments:
         return None
 
-    segment_ids = torch.tensor(list(union_segments), dtype=result.segments.dtype)
-    pred_mask = torch.isin(result.segments, segment_ids)  # [H, W] bool
+    segment_ids = torch.tensor(
+        list(union_segments), dtype=result.segments.dtype, device=result.segments.device
+    )
+    pred_mask = torch.isin(result.segments, segment_ids).cpu()  # [H, W] bool, CPU
 
     object_mask = get_object_mask(gt_mask, result.target_class_idx, mapping)
     if object_mask is None:
