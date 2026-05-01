@@ -10,13 +10,12 @@ log-probability for the target class.
 
 from __future__ import annotations
 
-import math
 import time
 from dataclasses import dataclass
 
 import torch
 import torch.nn.functional as F
-import torchvision.transforms.functional as TF
+from torchray.attribution.extremal_perturbation import MaskGenerator
 
 
 @dataclass
@@ -31,14 +30,6 @@ class EPResult:
     trajectory: list[dict[str, float]]
 
 
-def _sigma_to_kernel_size(sigma: float) -> int:
-    """Pick an odd kernel size large enough to cover ~3 sigma on each side."""
-    k = max(3, int(2 * round(3 * sigma) + 1))
-    if k % 2 == 0:
-        k += 1
-    return k
-
-
 def extremal_perturbation(
     model: torch.nn.Module,
     input_batch: torch.Tensor,
@@ -51,7 +42,7 @@ def extremal_perturbation(
     learning_rate: float = 0.01,
     momentum: float = 0.9,
     mask_step: int = 7,
-    mask_sigma: float = 11.0,
+    mask_sigma: float = 21.0,
     area_lambda: float = 300.0,
     area_lambda_growth: float = 1.0035,
     jitter: bool = True,
@@ -71,8 +62,8 @@ def extremal_perturbation(
         learning_rate: SGD learning rate.
         momentum: SGD momentum (also used as dampening, TorchRay-style).
         mask_step: Spatial downsampling factor for the parameter mask.
-        mask_sigma: Sigma (in upsampled pixels) of Gaussian smoothing applied
-            to the mask each iteration.
+        mask_sigma: Kernel sigma (in image-space pixels) for TorchRay's
+            ``MaskGenerator``. Also sets the mask margin (= sigma).
         area_lambda: Weight on the area-constraint penalty.
         area_lambda_growth: Per-iteration multiplicative growth of
             ``area_lambda`` (TorchRay-style annealing).
@@ -107,15 +98,15 @@ def extremal_perturbation(
         p.requires_grad_(False)
 
     try:
-        h_lo = math.ceil(height / mask_step)
-        w_lo = math.ceil(width / mask_step)
-        # Init with uniform random noise in [0, 1]. A perfectly uniform init
-        # (e.g. all-ones or all-0.5) gets blurred to a near-uniform mask,
-        # which causes torch.sort's stable tie-breaking to fall back on
-        # row-major flatten order — and that consistently pushes the kept
-        # region toward the bottom of the image (the last positions in the
-        # flatten). Random init breaks ties without spatial bias.
-        pmask = torch.rand(
+        # TorchRay's MaskGenerator: unfold + per-position kernel weighting with
+        # explicit margin/padding. Avoids the bilinear-upsample-plus-blur edge
+        # artifacts (mask drifting to corners, big-square blobs) that a naive
+        # parameterization produces.
+        mask_generator = MaskGenerator(
+            shape=(height, width), step=mask_step, sigma=mask_sigma
+        ).to(device)
+        h_lo, w_lo = mask_generator.shape_in
+        pmask = torch.ones(
             (1, 1, h_lo, w_lo),
             device=device,
             dtype=input_batch.dtype,
@@ -128,8 +119,6 @@ def extremal_perturbation(
         optimizer = torch.optim.SGD(
             [pmask], lr=learning_rate, momentum=momentum, dampening=momentum
         )
-
-        kernel_size = _sigma_to_kernel_size(mask_sigma) if mask_sigma > 0 else 0
 
         trajectory: list[dict[str, float]] = []
         start = time.perf_counter()
@@ -145,20 +134,13 @@ def extremal_perturbation(
             if elapsed >= max_time:
                 break
 
-            # Upsample low-res param to full image size and smooth.
-            mask_full = F.interpolate(
-                pmask, size=(height, width), mode="bilinear", align_corners=False
-            )
-            if kernel_size > 0:
-                mask_full = TF.gaussian_blur(
-                    mask_full,
-                    kernel_size=[kernel_size, kernel_size],
-                    sigma=[mask_sigma, mask_sigma],
-                )
-            mask_full = mask_full.clamp(0.0, 1.0)
+            # mask_cropped is [1, 1, H, W] (matches input). mask_with_margin
+            # is larger by 2*sigma — the margin lets the mask drift off-image
+            # without the area regularizer biasing it toward edges.
+            mask_cropped, mask_with_margin = mask_generator.generate(pmask)
 
             # Preservation: keep mask*x, replace (1-mask) with replacement.
-            x_pert = mask_full * input_batch + (1.0 - mask_full) * repl
+            x_pert = mask_cropped * input_batch + (1.0 - mask_cropped) * repl
 
             # Horizontal flip on alternating iterations breaks the
             # zero-padding / positional-bias exploit that otherwise pushes
@@ -174,8 +156,9 @@ def extremal_perturbation(
             # ascending and compare against a reference vector that holds 0
             # for the bottom (1 - area) fraction and 1 for the top area
             # fraction. Squared error pushes the histogram toward {0, 1}
-            # with the desired count.
-            sorted_mask, _ = torch.sort(mask_full.flatten(), descending=False)
+            # with the desired count. Use the with-margin mask so the area
+            # constraint accounts for mask mass that drifted into the margin.
+            sorted_mask, _ = torch.sort(mask_with_margin.flatten(), descending=False)
             n = sorted_mask.numel()
             n_keep = round(area * n)
             ref = torch.zeros_like(sorted_mask)
@@ -195,7 +178,7 @@ def extremal_perturbation(
             iters_done = t + 1
             final_loss = float(loss.item())
             final_target_logprob = float(target_log_prob.item())
-            soft_mask = mask_full.detach()
+            soft_mask = mask_cropped.detach()
 
             if t % trajectory_log_every == 0:
                 trajectory.append(
