@@ -1,0 +1,17 @@
+defaults:
+  - model: resnet50
+  - classes: imagenet
+  - replacement: mean_color
+
+tracking_uri: https://mlflow.rationai.cloud.e-infra.cz/
+experiment_name: algorithm-comparison-imagenet-s
+
+# Path to the original images (same as data.batch_path used in the explanation job)
+images_path: ???
+
+# Saliency map construction
+sigma_fraction: 0.09
+
+# Deletion metric — set to true only when GPU/model is available
+compute_deletion: false
+deletion_steps: 10
