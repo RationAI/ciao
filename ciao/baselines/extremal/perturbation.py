@@ -38,13 +38,12 @@ def extremal_perturbation(
     *,
     area: float = 0.1,
     max_time: float = 60.0,
-    max_iterations: int = 800,
+    max_iterations: int = 1600,
     learning_rate: float = 0.01,
     momentum: float = 0.9,
     mask_step: int = 7,
     mask_sigma: float = 21.0,
     area_lambda: float = 300.0,
-    area_lambda_growth: float = 1.0035,
     jitter: bool = True,
     trajectory_log_every: int = 10,
 ) -> EPResult:
@@ -58,15 +57,14 @@ def extremal_perturbation(
         area: Target fraction of pixels to keep (e.g. ``0.1``).
         max_time: Wall-clock budget in seconds. Optimization stops at the
             first iteration boundary after the budget is exceeded.
-        max_iterations: Hard cap on optimization iterations.
+        max_iterations: Hard cap on optimization iterations (paper: 1600).
         learning_rate: SGD learning rate.
         momentum: SGD momentum (also used as dampening, TorchRay-style).
         mask_step: Spatial downsampling factor for the parameter mask.
         mask_sigma: Kernel sigma (in image-space pixels) for TorchRay's
             ``MaskGenerator``. Also sets the mask margin (= sigma).
-        area_lambda: Weight on the area-constraint penalty.
-        area_lambda_growth: Per-iteration multiplicative growth of
-            ``area_lambda`` (TorchRay-style annealing).
+        area_lambda: Initial weight on the area-constraint penalty (paper: 300).
+            Doubled at 1/3 and 2/3 of ``max_iterations`` (paper schedule).
         jitter: If True, horizontally flip the perturbed input on alternating
             iterations. Breaks the zero-padding / corner-bias artifact that
             otherwise pushes the mask to image edges.
@@ -174,7 +172,9 @@ def extremal_perturbation(
             with torch.no_grad():
                 pmask.clamp_(0.0, 1.0)
 
-            current_lambda *= area_lambda_growth
+            # Double λ at 1/3 and 2/3 of total iterations (paper schedule).
+            if t + 1 == max_iterations // 3 or t + 1 == 2 * max_iterations // 3:
+                current_lambda *= 2
             iters_done = t + 1
             final_loss = float(loss.item())
             final_target_logprob = float(target_log_prob.item())
