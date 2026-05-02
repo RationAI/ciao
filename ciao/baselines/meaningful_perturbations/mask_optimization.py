@@ -51,7 +51,7 @@ def meaningful_perturbation(
     target_class_idx: int,
     replacement_image: torch.Tensor,
     *,
-    area_lambda: float = 8.0,
+    area_lambda: float = 300.0,
     area_lambda_growth: float = 1.0035,
     tv_lambda: float = 1e-2,
     max_time: float = 60.0,
