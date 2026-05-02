@@ -92,14 +92,21 @@ def meaningful_perturbation(
         step=mask_step,
         sigma=mask_sigma,
         clamp=True,
+    ).to(device)
+    h_lo, w_lo = mask_gen.shape_in
+    # Separate low-res parameter tensor; MaskGenerator.generate() upsamples it.
+    pmask = torch.full(
+        (1, 1, h_lo, w_lo),
+        0.5,
         device=device,
+        dtype=input_batch.dtype,
+        requires_grad=True,
     )
-    # mask_gen.masks: [1, 1, H, W]
-    # We optimize mask_gen.weight (the low-resolution parameters)
     optimizer = torch.optim.SGD(
-        [mask_gen.weight],
+        [pmask],
         lr=learning_rate,
         momentum=momentum,
+        dampening=momentum,
     )
 
     model.eval()
@@ -116,24 +123,24 @@ def meaningful_perturbation(
 
         optimizer.zero_grad()
 
-        # [1, 1, H, W] deletion mask: 1 = replace, 0 = keep
-        mask = mask_gen()
+        # mask_cropped: [1, 1, H, W], deletion mask: 1 = replace, 0 = keep
+        mask_cropped, _ = mask_gen.generate(pmask)
 
         inp = input_batch
         repl = replacement_batch
         if jitter and iteration % 2 == 0:
             inp = torch.flip(inp, dims=[-1])
             repl = torch.flip(repl, dims=[-1])
-            perturbed = (1.0 - mask) * inp + mask * repl
+            perturbed = (1.0 - mask_cropped) * inp + mask_cropped * repl
             perturbed = torch.flip(perturbed, dims=[-1])
         else:
-            perturbed = (1.0 - mask) * inp + mask * repl
+            perturbed = (1.0 - mask_cropped) * inp + mask_cropped * repl
 
         logits = model(perturbed)
         log_probs = F.log_softmax(logits, dim=1)
         target_logprob = log_probs[0, target_class_idx]
 
-        mask_2d = mask.squeeze()  # [H, W]
+        mask_2d = mask_cropped.squeeze()  # [H, W]
         loss = (
             target_logprob
             + area_lambda * mask_2d.mean()
@@ -157,7 +164,8 @@ def meaningful_perturbation(
             )
 
     with torch.no_grad():
-        final_mask = mask_gen().squeeze(0).squeeze(0)  # [H, W]
+        final_mask, _ = mask_gen.generate(pmask)
+        final_mask = final_mask.squeeze()  # [H, W]
         final_perturbed = (1.0 - final_mask) * input_batch.squeeze(
             0
         ) + final_mask * replacement_image
