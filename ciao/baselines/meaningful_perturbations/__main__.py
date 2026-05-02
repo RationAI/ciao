@@ -65,6 +65,7 @@ def main(cfg: DictConfig) -> None:
                     target_class_idx=cfg.target_class_idx,
                     area=cfg.mp.area,
                     area_lambda=cfg.mp.area_lambda,
+                    area_lambda_growth=cfg.mp.area_lambda_growth,
                     tv_lambda=cfg.mp.tv_lambda,
                     max_time=cfg.mp.max_time,
                     max_iterations=cfg.mp.max_iterations,
