@@ -19,6 +19,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import hydra
+import matplotlib.pyplot as plt
 import mlflow
 import numpy as np
 import torch
@@ -27,8 +28,13 @@ from omegaconf import DictConfig
 
 from ciao.data.imagenet_s import build_imagenet_s_mapping, load_mask
 from ciao.data.preprocessing import load_and_preprocess_image
-from ciao.metrics import build_saliency_map, compute_deletion_auc, compute_pointing_game
+from ciao.metrics import (
+    build_saliency_map,
+    compute_deletion_curve,
+    compute_pointing_game,
+)
 from ciao.model.predictor import ModelPredictor
+from ciao.visualization import plot_deletion_curve, plot_saliency_map
 
 
 # Run name format produced by the job script: {label}-{seed}-length-{desired_length}
@@ -243,17 +249,19 @@ def main(cfg: DictConfig) -> None:
                         mapping=imagenet_s_mapping,
                     )
 
-            # Compute deletion AUC if requested
+            # Compute deletion curve + figures (requires model + images)
             deletion_auc: float | None = None
-            if (
-                cfg.compute_deletion
-                and predictor is not None
-                and replacement_fn is not None
-            ):
+            deletion_fractions: np.ndarray | None = None
+            deletion_probs: np.ndarray | None = None
+            input_tensor: torch.Tensor | None = None
+            class_name: str | None = None
+
+            needs_image = cfg.compute_deletion or cfg.log_figures
+            if needs_image and predictor is not None and replacement_fn is not None:
                 image_path = images_path / image_name
                 if not image_path.exists():
                     print(
-                        f"  WARN: image not found at {image_path} — skipping deletion"
+                        f"  WARN: image not found at {image_path} — skipping deletion/figures"
                     )
                 else:
                     input_tensor = load_and_preprocess_image(
@@ -267,18 +275,25 @@ def main(cfg: DictConfig) -> None:
                             predictor.get_logits(input_batch).argmax(dim=1)[0].item()
                         )
 
-                    deletion_auc = compute_deletion_auc(
-                        image=input_batch,
-                        saliency_map=saliency_map,
-                        target_class_idx=target_class_idx,
-                        predictor=predictor,
-                        replacement_image=replacement_image,
-                        n_steps=cfg.deletion_steps,
-                    )
+                    class_name = predictor.class_names[target_class_idx]
+
+                    if cfg.compute_deletion:
+                        deletion_fractions, deletion_probs = compute_deletion_curve(
+                            image=input_batch,
+                            saliency_map=saliency_map,
+                            target_class_idx=target_class_idx,
+                            predictor=predictor,
+                            replacement_image=replacement_image,
+                            n_steps=cfg.deletion_steps,
+                        )
+                        deletion_auc = float(
+                            np.trapezoid(deletion_probs, deletion_fractions)
+                        )
 
             # Log back to every child run in this group
-            with tempfile.TemporaryDirectory() as tmpdir:
-                saliency_path = Path(tmpdir) / "saliency_map.npy"
+            with tempfile.TemporaryDirectory() as _tmpdir:
+                tmp = Path(_tmpdir)
+                saliency_path = tmp / "saliency_map.npy"
                 np.save(saliency_path, saliency_map)
 
                 for run_id in length_to_run_id.values():
@@ -288,6 +303,25 @@ def main(cfg: DictConfig) -> None:
                             mlflow.log_metric("deletion_auc", deletion_auc)
                         if pointing_game is not None:
                             mlflow.log_metric("pointing_game", float(pointing_game))
+                        if cfg.log_figures and input_tensor is not None:
+                            fig_sal = plot_saliency_map(
+                                input_tensor, saliency_map, class_name
+                            )
+                            mlflow.log_figure(fig_sal, "figures/saliency_map.png")
+                            plt.close(fig_sal)
+                        if (
+                            cfg.log_figures
+                            and deletion_fractions is not None
+                            and deletion_probs is not None
+                        ):
+                            fig_del = plot_deletion_curve(
+                                deletion_fractions,
+                                deletion_probs,
+                                deletion_auc,
+                                class_name,
+                            )
+                            mlflow.log_figure(fig_del, "figures/deletion_curve.png")
+                            plt.close(fig_del)
 
             parts = [f"masks={len(binary_masks)}"]
             if deletion_auc is not None:
