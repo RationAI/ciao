@@ -1,9 +1,10 @@
-"""Saliency map construction and deletion metric for CIAO explanations."""
+"""Saliency map construction and saliency-based evaluation metrics for CIAO explanations."""
 
 import numpy as np
 import torch
 from scipy.ndimage import gaussian_filter
 
+from ciao.data.imagenet_s import ImageNetSMapping, get_object_mask
 from ciao.model.predictor import ModelPredictor
 
 
@@ -91,3 +92,44 @@ def compute_deletion_auc(
         probs.append(prob)
 
     return float(np.trapezoid(probs, fractions))
+
+
+def compute_pointing_game(
+    saliency_map: np.ndarray,
+    target_class_idx: int,
+    gt_mask: torch.Tensor,
+    mapping: ImageNetSMapping,
+) -> bool | None:
+    """Compute the pointing game metric for a single image.
+
+    Checks whether the pixel with the highest saliency value falls inside the
+    ground truth object region for ``target_class_idx``.  The GT mask is
+    resized to the saliency map resolution with nearest-neighbour interpolation.
+
+    Args:
+        saliency_map: [H, W] float saliency map (higher = more important).
+        target_class_idx: ImageNet-1000 class index being explained.
+        gt_mask: [H', W'] int32 tensor from load_mask() at original resolution.
+        mapping: ImageNetSMapping from build_imagenet_s_mapping().
+
+    Returns:
+        True (hit) / False (miss), or None if the class is not in ImageNet-S-919.
+    """
+    object_mask = get_object_mask(gt_mask, target_class_idx, mapping)
+    if object_mask is None:
+        return None
+
+    H, W = saliency_map.shape
+    gt_resized = (
+        torch.nn.functional.interpolate(
+            object_mask.float().unsqueeze(0).unsqueeze(0),
+            size=(H, W),
+            mode="nearest",
+        )
+        .squeeze()
+        .bool()
+        .numpy()
+    )
+
+    peak = np.unravel_index(np.argmax(saliency_map), saliency_map.shape)
+    return bool(gt_resized[peak])
