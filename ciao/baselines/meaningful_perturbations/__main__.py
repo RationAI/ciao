@@ -67,13 +67,14 @@ def main(cfg: DictConfig) -> None:
                     area_lambda=cfg.mp.area_lambda,
                     area_lambda_growth=cfg.mp.area_lambda_growth,
                     tv_lambda=cfg.mp.tv_lambda,
+                    tv_beta=cfg.mp.tv_beta,
                     max_time=cfg.mp.max_time,
                     max_iterations=cfg.mp.max_iterations,
                     learning_rate=cfg.mp.learning_rate,
-                    momentum=cfg.mp.momentum,
                     mask_step=cfg.mp.mask_step,
                     mask_sigma=cfg.mp.mask_sigma,
                     jitter=cfg.mp.jitter,
+                    jitter_tau=cfg.mp.jitter_tau,
                     batch_size=cfg.batch_size,
                 )
 
