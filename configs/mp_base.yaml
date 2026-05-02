@@ -12,7 +12,8 @@ seed: 42
 
 mp:
   area: 0.1                    # fraction of pixels to threshold for the final discrete mask
-  area_lambda: 8.0             # weight on mask-area penalty (encourages small deletion mask)
+  area_lambda: 8.0             # initial weight on mask-area penalty (encourages small deletion mask)
+  area_lambda_growth: 1.0035   # per-iteration multiplicative growth for area_lambda
   tv_lambda: 0.01              # weight on total-variation smoothness penalty
   max_time: 60.0               # wall-clock budget (seconds)
   max_iterations: 800          # hard cap on optimizer iterations

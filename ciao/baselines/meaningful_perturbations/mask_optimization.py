@@ -52,6 +52,7 @@ def meaningful_perturbation(
     replacement_image: torch.Tensor,
     *,
     area_lambda: float = 8.0,
+    area_lambda_growth: float = 1.0035,
     tv_lambda: float = 1e-2,
     max_time: float = 60.0,
     max_iterations: int = 800,
@@ -69,7 +70,8 @@ def meaningful_perturbation(
         input_batch: Input image [1, C, H, W] on the model's device.
         target_class_idx: Class index to suppress.
         replacement_image: Replacement tensor [C, H, W] matching input_batch.
-        area_lambda: Weight on the mask area penalty (encourages small mask).
+        area_lambda: Initial weight on the mask area penalty (encourages small mask).
+        area_lambda_growth: Per-iteration multiplicative growth factor for area_lambda.
         tv_lambda: Weight on total-variation smoothness penalty.
         max_time: Wall-clock budget in seconds.
         max_iterations: Hard cap on optimizer iterations.
@@ -94,10 +96,9 @@ def meaningful_perturbation(
         clamp=True,
     ).to(device)
     h_lo, w_lo = mask_gen.shape_in
-    # Separate low-res parameter tensor; MaskGenerator.generate() upsamples it.
-    pmask = torch.full(
+    # Start from "delete nothing"; gradients grow the mask toward important regions.
+    pmask = torch.zeros(
         (1, 1, h_lo, w_lo),
-        0.5,
         device=device,
         dtype=input_batch.dtype,
         requires_grad=True,
@@ -149,6 +150,9 @@ def meaningful_perturbation(
 
         loss.backward()
         optimizer.step()
+        with torch.no_grad():
+            pmask.clamp_(0.0, 1.0)
+        area_lambda *= area_lambda_growth
 
         loss_val = float(loss.item())
         if loss_val < best_loss:
