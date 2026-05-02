@@ -9,6 +9,10 @@ experiment_name: algorithm-comparison-imagenet-s
 # Path to the original images (same as data.batch_path used in the explanation job)
 images_path: ???
 
+# Path to ImageNet-S ground truth masks (same as data.masks_path used in the explanation job)
+# Set to null to skip pointing game
+masks_path: null
+
 # Saliency map construction
 sigma_fraction: 0.09
 

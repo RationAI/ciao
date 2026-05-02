@@ -25,8 +25,9 @@ import torch
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 
+from ciao.data.imagenet_s import build_imagenet_s_mapping, load_mask
 from ciao.data.preprocessing import load_and_preprocess_image
-from ciao.metrics import build_saliency_map, compute_deletion_auc
+from ciao.metrics import build_saliency_map, compute_deletion_auc, compute_pointing_game
 from ciao.model.predictor import ModelPredictor
 
 
@@ -167,6 +168,9 @@ def main(cfg: DictConfig) -> None:
 
     images_path = Path(cfg.images_path)
 
+    masks_path = Path(cfg.masks_path) if cfg.masks_path else None
+    imagenet_s_mapping = build_imagenet_s_mapping() if masks_path is not None else None
+
     # ------------------------------------------------------------------
     # 3. For each (algorithm, image): build saliency map, compute deletion,
     #    log back to every child run in that group.
@@ -223,6 +227,22 @@ def main(cfg: DictConfig) -> None:
                 binary_masks, sigma_fraction=cfg.sigma_fraction
             )
 
+            # Compute pointing game if masks are available
+            pointing_game: bool | None = None
+            if (
+                masks_path is not None
+                and imagenet_s_mapping is not None
+                and target_class_idx is not None
+            ):
+                mask_file = masks_path / (Path(image_name).stem + ".png")
+                if mask_file.exists():
+                    pointing_game = compute_pointing_game(
+                        saliency_map=saliency_map,
+                        target_class_idx=target_class_idx,
+                        gt_mask=load_mask(mask_file),
+                        mapping=imagenet_s_mapping,
+                    )
+
             # Compute deletion AUC if requested
             deletion_auc: float | None = None
             if (
@@ -266,13 +286,15 @@ def main(cfg: DictConfig) -> None:
                         mlflow.log_artifact(str(saliency_path))
                         if deletion_auc is not None:
                             mlflow.log_metric("deletion_auc", deletion_auc)
+                        if pointing_game is not None:
+                            mlflow.log_metric("pointing_game", float(pointing_game))
 
-            status = (
-                f"deletion_auc={deletion_auc:.4f}"
-                if deletion_auc is not None
-                else "no deletion"
-            )
-            print(f"  Done — masks={len(binary_masks)}, {status}")
+            parts = [f"masks={len(binary_masks)}"]
+            if deletion_auc is not None:
+                parts.append(f"deletion_auc={deletion_auc:.4f}")
+            if pointing_game is not None:
+                parts.append(f"pointing_game={'hit' if pointing_game else 'miss'}")
+            print(f"  Done — {', '.join(parts)}")
 
     print(f"\nFinished. Processed {done} (algorithm, image) groups.")
 
