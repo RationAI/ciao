@@ -70,7 +70,6 @@ def main(cfg: DictConfig) -> None:
                     mask_step=cfg.ep.mask_step,
                     mask_sigma=cfg.ep.mask_sigma,
                     area_lambda=cfg.ep.area_lambda,
-                    area_lambda_growth=cfg.ep.area_lambda_growth,
                     jitter=cfg.ep.jitter,
                     batch_size=cfg.batch_size,
                 )
