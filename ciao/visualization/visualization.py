@@ -14,7 +14,10 @@ from ciao.data.constants import IMAGENET_MEAN, IMAGENET_STD
 
 
 if TYPE_CHECKING:
+    from matplotlib.axes import Axes
+
     from ciao.explainer.ciao_explainer import ExplanationResult
+    from ciao.scoring.region import RegionResult
 
 
 _IMAGENET_MEAN = np.asarray(IMAGENET_MEAN, dtype=np.float32)
@@ -80,49 +83,71 @@ def plot_overview(result: ExplanationResult) -> Figure:
     return fig
 
 
+def _label_regions(ax: Axes, segs: np.ndarray, regions: list[RegionResult]) -> None:
+    """Draw numbered labels centered on each region mask."""
+    for i, region_result in enumerate(regions, start=1):
+        mask = _region_mask(segs, region_result.region)
+        ys, xs = np.where(mask)
+        if len(ys) == 0:
+            continue
+        cy, cx = ys.mean(), xs.mean()
+        ax.text(
+            cx,
+            cy,
+            str(i),
+            ha="center",
+            va="center",
+            fontsize=12,
+            fontweight="bold",
+            color="white",
+            bbox={"boxstyle": "round,pad=0.2", "fc": "black", "alpha": 0.5},
+        )
+
+
 def plot_regions(result: ExplanationResult) -> Figure:
-    """One subplot per region: region pixels replaced, rest is original."""
+    """Single image: all regions replaced at once, each labeled by number."""
     img = _to_hwc(result.input_batch)
     repl = _to_hwc(result.replacement_image.unsqueeze(0))
     segs = result.segments.cpu().numpy()
-    n = len(result.regions)
 
-    fig, axes = plt.subplots(1, n, figsize=(5 * n, 5), squeeze=False)
-    for ax, region_result in zip(axes[0], result.regions, strict=True):
+    composite = img.copy()
+    for region_result in result.regions:
         mask = _region_mask(segs, region_result.region)
-        blended = img.copy()
-        blended[mask] = repl[mask]
-        ax.imshow(blended)
-        ax.axis("off")
+        composite[mask] = repl[mask]
 
+    fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+    ax.imshow(composite)
+    _label_regions(ax, segs, result.regions)
+    ax.axis("off")
     fig.tight_layout(pad=0)
     return fig
 
 
 def plot_region_scores(result: ExplanationResult) -> Figure:
-    """One subplot per region: region pixels tinted by score, rest is original.
+    """Single image: all regions tinted by score with cycling opacity, labeled by number.
 
     Positive score → red tint, negative → blue tint (diverging, symmetric).
+    Opacity cycles across regions so adjacent regions remain visually distinct.
     """
     img = _to_hwc(result.input_batch)
     segs = result.segments.cpu().numpy()
-    n = len(result.regions)
 
     all_scores = [r.score for r in result.regions]
     abs_max = max(abs(s) for s in all_scores) or 1.0
     cmap = plt.get_cmap("RdBu_r")
     norm = mcolors.Normalize(vmin=-abs_max, vmax=abs_max)
+    alphas = [0.45, 0.65, 0.85]
 
-    fig, axes = plt.subplots(1, n, figsize=(5 * n, 5), squeeze=False)
-    for ax, region_result in zip(axes[0], result.regions, strict=True):
+    composite = img.copy()
+    for i, region_result in enumerate(result.regions):
         mask = _region_mask(segs, region_result.region)
         tint = np.array(cmap(norm(region_result.score))[:3], dtype=np.float32)
+        alpha = alphas[i % len(alphas)]
+        composite[mask] = composite[mask] * (1 - alpha) + tint * alpha
 
-        colored = img.copy()
-        colored[mask] = colored[mask] * 0.35 + tint * 0.65
-
-        ax.imshow(colored)
-        ax.axis("off")
-
+    fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+    ax.imshow(composite)
+    _label_regions(ax, segs, result.regions)
+    ax.axis("off")
     fig.tight_layout(pad=0)
     return fig
