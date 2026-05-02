@@ -14,10 +14,7 @@ from ciao.data.constants import IMAGENET_MEAN, IMAGENET_STD
 
 
 if TYPE_CHECKING:
-    from matplotlib.axes import Axes
-
     from ciao.explainer.ciao_explainer import ExplanationResult
-    from ciao.scoring.region import RegionResult
 
 
 _IMAGENET_MEAN = np.asarray(IMAGENET_MEAN, dtype=np.float32)
@@ -83,29 +80,8 @@ def plot_overview(result: ExplanationResult) -> Figure:
     return fig
 
 
-def _label_regions(ax: Axes, segs: np.ndarray, regions: list[RegionResult]) -> None:
-    """Draw numbered labels centered on each region mask."""
-    for i, region_result in enumerate(regions, start=1):
-        mask = _region_mask(segs, region_result.region)
-        ys, xs = np.where(mask)
-        if len(ys) == 0:
-            continue
-        cy, cx = ys.mean(), xs.mean()
-        ax.text(
-            cx,
-            cy,
-            str(i),
-            ha="center",
-            va="center",
-            fontsize=12,
-            fontweight="bold",
-            color="white",
-            bbox={"boxstyle": "round,pad=0.2", "fc": "black", "alpha": 0.5},
-        )
-
-
 def plot_regions(result: ExplanationResult) -> Figure:
-    """Single image: all regions replaced at once, each labeled by number."""
+    """Single image: all regions replaced at once."""
     img = _to_hwc(result.input_batch)
     repl = _to_hwc(result.replacement_image.unsqueeze(0))
     segs = result.segments.cpu().numpy()
@@ -117,7 +93,6 @@ def plot_regions(result: ExplanationResult) -> Figure:
 
     fig, ax = plt.subplots(1, 1, figsize=(5, 5))
     ax.imshow(composite)
-    _label_regions(ax, segs, result.regions)
     ax.axis("off")
     fig.tight_layout(pad=0)
     return fig
@@ -187,7 +162,7 @@ def plot_deletion_curve(
 
 
 def plot_region_scores(result: ExplanationResult) -> Figure:
-    """Single image: all regions tinted by score with cycling opacity, labeled by number.
+    """Single image: all regions tinted by score with cycling opacity.
 
     Positive score → red tint, negative → blue tint (diverging, symmetric).
     Opacity cycles across regions so adjacent regions remain visually distinct.
@@ -210,7 +185,6 @@ def plot_region_scores(result: ExplanationResult) -> Figure:
 
     fig, ax = plt.subplots(1, 1, figsize=(5, 5))
     ax.imshow(composite)
-    _label_regions(ax, segs, result.regions)
     ax.axis("off")
     fig.tight_layout(pad=0)
     return fig
