@@ -51,12 +51,12 @@ def meaningful_perturbation(
     target_class_idx: int,
     replacement_image: torch.Tensor,
     *,
-    area_lambda: float = 300.0,
+    area_lambda: float = 8.0,
     area_lambda_growth: float = 1.0035,
     tv_lambda: float = 1e-2,
     max_time: float = 60.0,
     max_iterations: int = 800,
-    learning_rate: float = 0.01,
+    learning_rate: float = 0.05,
     momentum: float = 0.9,
     mask_step: int = 7,
     mask_sigma: float = 21.0,
@@ -107,7 +107,7 @@ def meaningful_perturbation(
         [pmask],
         lr=learning_rate,
         momentum=momentum,
-        dampening=momentum,
+        dampening=0.0,
     )
 
     model.eval()
