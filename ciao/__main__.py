@@ -1,4 +1,5 @@
 import random
+import tempfile
 import time
 from contextlib import nullcontext
 from pathlib import Path
@@ -250,6 +251,10 @@ def main(cfg: DictConfig) -> None:
                 elapsed = time.perf_counter() - start_time
 
                 _log_explanation_results(run.info.run_id, results, elapsed)
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    seg_path = Path(tmpdir) / "segments.npy"
+                    np.save(seg_path, results.segments.cpu().numpy())
+                    mlflow.log_artifact(str(seg_path))
                 if cfg.logger.log_figures:
                     _log_figures(results)
                 if mapping is not None and masks_path is not None:
