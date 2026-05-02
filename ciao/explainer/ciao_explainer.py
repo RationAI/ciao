@@ -35,6 +35,7 @@ class ExplanationResult:
     replacement_image: torch.Tensor
     combined_score: float | None = None
     combined_probability_drop: float | None = None
+    soft_mask: torch.Tensor | None = None
 
 
 class CIAOExplainer:

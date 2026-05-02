@@ -1,0 +1,24 @@
+defaults:
+  - logger: mlflow
+  - data: single_image
+  - model: resnet50
+  - classes: imagenet
+  - replacement: mean_color
+  - segmentation: hexagonal
+  - _self_
+
+# Shared hyperparameters
+target_class_idx: null
+batch_size: 64
+seed: 42
+
+# Sign filter on segment selection (matches CIAO's sigma):
+#   null -> top-K by |weight|, +1 -> only positive evidence, -1 -> only negative
+sigma: null
+
+# Number of segments included in the kept region (analog of CIAO's desired_length).
+desired_length: 30
+
+# LIME-specific hyperparameters
+lime:
+  n_samples: 1000              # perturbed samples (analog of CIAO's maxEvals)

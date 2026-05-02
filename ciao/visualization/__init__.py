@@ -4,6 +4,7 @@ from ciao.visualization.visualization import (
     plot_region_scores,
     plot_regions,
     plot_saliency_map,
+    plot_soft_mask,
 )
 
 
@@ -13,4 +14,5 @@ __all__ = [
     "plot_region_scores",
     "plot_regions",
     "plot_saliency_map",
+    "plot_soft_mask",
 ]

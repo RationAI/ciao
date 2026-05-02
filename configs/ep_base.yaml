@@ -1,0 +1,25 @@
+defaults:
+  - logger: mlflow
+  - data: single_image
+  - model: resnet50
+  - classes: imagenet
+  - replacement: mean_color
+  - _self_
+
+# Shared hyperparameters
+target_class_idx: null
+batch_size: 64
+seed: 42
+
+# Extremal-Perturbation-specific hyperparameters
+ep:
+  area: 0.1                    # fraction of image to keep
+  max_time: 60.0               # wall-clock budget (seconds)
+  max_iterations: 800          # hard cap on optimizer iterations
+  learning_rate: 0.01          # SGD lr (TorchRay default)
+  momentum: 0.9                # SGD momentum + dampening (TorchRay default)
+  mask_step: 7                 # low-res parameterization step (pixels)
+  mask_sigma: 21.0             # MaskGenerator kernel sigma (TorchRay default)
+  area_lambda: 300.0           # initial area-penalty weight
+  area_lambda_growth: 1.0035   # per-iteration growth factor
+  jitter: true                 # h-flip every other iter to break corner-bias
