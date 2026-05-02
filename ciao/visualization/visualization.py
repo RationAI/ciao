@@ -99,6 +99,69 @@ def plot_regions(result: ExplanationResult) -> Figure:
     return fig
 
 
+def plot_saliency_map(
+    image: torch.Tensor,
+    saliency_map: np.ndarray,
+    class_name: str | None = None,
+) -> Figure:
+    """Side-by-side: original image | saliency map overlaid on the image.
+
+    Args:
+        image: [1, C, H, W] or [C, H, W] preprocessed image tensor.
+        saliency_map: [H, W] float array in [0, 1], higher = more salient.
+        class_name: Optional label shown in the figure title.
+    """
+    img = _to_hwc(image if image.dim() == 4 else image.unsqueeze(0))
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+
+    axes[0].imshow(img)
+    axes[0].set_title("original" if class_name is None else class_name)
+    axes[0].axis("off")
+
+    axes[1].imshow(img)
+    sal = axes[1].imshow(saliency_map, cmap="jet", alpha=0.5, vmin=0.0, vmax=1.0)
+    axes[1].set_title("saliency map")
+    axes[1].axis("off")
+    fig.colorbar(sal, ax=axes[1], fraction=0.046, pad=0.04)
+
+    fig.tight_layout(pad=0.5)
+    return fig
+
+
+def plot_deletion_curve(
+    fractions: np.ndarray,
+    probs: np.ndarray,
+    auc: float | None = None,
+    class_name: str | None = None,
+) -> Figure:
+    """Plot the deletion curve: target class probability vs fraction of pixels deleted.
+
+    Args:
+        fractions: 1-D array of masked pixel fractions (x-axis, 0 to 1).
+        probs: 1-D array of target class probabilities at each fraction (y-axis).
+        auc: Pre-computed AUC to annotate on the plot (computed if not provided).
+        class_name: Optional label shown in the figure title.
+    """
+    if auc is None:
+        auc = float(np.trapezoid(probs, fractions))
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.plot(fractions, probs, color="steelblue", linewidth=2)
+    ax.fill_between(
+        fractions, probs, alpha=0.2, color="steelblue", label=f"AUC = {auc:.4f}"
+    )
+    ax.set_xlabel("fraction of pixels deleted")
+    ax.set_ylabel("target class probability")
+    title = "deletion curve" if class_name is None else f"deletion curve — {class_name}"
+    ax.set_title(title)
+    ax.set_xlim(0.0, 1.0)
+    ax.set_ylim(0.0, 1.0)
+    ax.legend()
+    fig.tight_layout()
+    return fig
+
+
 def plot_region_scores(result: ExplanationResult) -> Figure:
     """Single image: all regions tinted by score with cycling opacity.
 

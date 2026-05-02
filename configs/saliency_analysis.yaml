@@ -20,3 +20,6 @@ sigma_fraction: 0.09
 # Deletion metric — set to true only when GPU/model is available
 compute_deletion: false
 deletion_steps: 10
+
+# Log saliency map and deletion curve figures back to MLflow
+log_figures: true

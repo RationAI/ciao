@@ -34,23 +34,19 @@ def build_saliency_map(
     return smoothed / max_val if max_val > 0 else smoothed
 
 
-def compute_deletion_auc(
+def compute_deletion_curve(
     image: torch.Tensor,
     saliency_map: np.ndarray,
     target_class_idx: int,
     predictor: ModelPredictor,
     replacement_image: torch.Tensor,
     n_steps: int = 10,
-) -> float:
-    """Compute the deletion AUC metric.
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute the deletion curve (fractions, probabilities).
 
     Progressively masks the highest-saliency pixels (replacing them with
     ``replacement_image``) and measures the target class probability at
     ``n_steps + 1`` equally spaced fractions from 0% to 100% masked.
-    Returns the area under the resulting curve (trapezoidal rule).
-
-    Lower AUC means the saliency map correctly identified important regions
-    (masking them quickly destroys the prediction).
 
     Args:
         image: [1, C, H, W] preprocessed input tensor.
@@ -61,7 +57,7 @@ def compute_deletion_auc(
         n_steps: Number of masking steps between 0 and 100 % (inclusive endpoints).
 
     Returns:
-        Scalar AUC in [0, 1].
+        Tuple of (fractions, probs), each a 1-D float64 array of length n_steps + 1.
     """
     H, W = saliency_map.shape
     n_pixels = H * W
@@ -91,6 +87,36 @@ def compute_deletion_auc(
         )
         probs.append(prob)
 
+    return fractions, np.array(probs, dtype=np.float64)
+
+
+def compute_deletion_auc(
+    image: torch.Tensor,
+    saliency_map: np.ndarray,
+    target_class_idx: int,
+    predictor: ModelPredictor,
+    replacement_image: torch.Tensor,
+    n_steps: int = 10,
+) -> float:
+    """Compute the deletion AUC metric (area under the deletion curve).
+
+    Lower AUC means the saliency map correctly identified important regions
+    (masking them quickly destroys the prediction).
+
+    Args:
+        image: [1, C, H, W] preprocessed input tensor.
+        saliency_map: [H, W] float saliency map (higher = more important).
+        target_class_idx: Index of the class being explained.
+        predictor: ModelPredictor used for inference.
+        replacement_image: [C, H, W] replacement tensor (same as used during explanation).
+        n_steps: Number of masking steps between 0 and 100 % (inclusive endpoints).
+
+    Returns:
+        Scalar AUC in [0, 1].
+    """
+    fractions, probs = compute_deletion_curve(
+        image, saliency_map, target_class_idx, predictor, replacement_image, n_steps
+    )
     return float(np.trapezoid(probs, fractions))
 
 
