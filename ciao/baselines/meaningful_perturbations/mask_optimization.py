@@ -7,23 +7,24 @@ The objective is: find the smallest mask m such that perturbing the image
 inside the mask (replacing with the replacement image) causes the model to
 lose confidence in the target class.
 
-Loss = log_prob_target(perturbed) + λ_area * mean(m) + λ_tv * TV(m)
+Loss = prob_target(perturbed) + λ_area * mean(mask) + λ_tv * TV_β(mask)
 
-Minimizing this drives the model probability down (first term, note: we want
-it low, so we minimize it directly) while keeping the mask small (second term)
-and smooth (third term via total variation).
+The mask is parameterized at low resolution (h//step x w//step) with a sigmoid
+activation, bilinearly upsampled to full resolution, then blurred with a Gaussian
+kernel -- matching the paper's upsampling + smoothing scheme from sec. 4 of the paper.
 
-We borrow TorchRay's MaskGenerator for the smooth low-resolution parameterization.
+Convention: mask=1 means replace (delete), mask=0 means keep.  This is 1-m from
+the paper's notation, where m=1 means keep.
 """
 
 from __future__ import annotations
 
+import random
 import time
 from dataclasses import dataclass, field
 
 import torch
 import torch.nn.functional as F
-from torchray.attribution.extremal_perturbation import MaskGenerator
 
 
 @dataclass
@@ -38,11 +39,22 @@ class MPResult:
     trajectory: list[dict[str, float]] = field(default_factory=list)
 
 
-def _total_variation(mask: torch.Tensor) -> torch.Tensor:
-    """Isotropic total variation of a [H, W] mask."""
-    diff_h = (mask[1:, :] - mask[:-1, :]).pow(2)
-    diff_w = (mask[:, 1:] - mask[:, :-1]).pow(2)
-    return diff_h.mean() + diff_w.mean()
+def _make_gaussian_kernel(sigma: float, device: torch.device) -> torch.Tensor:
+    """Build a separable 2D Gaussian conv kernel [1, 1, K, K]."""
+    k = max(3, int(6 * sigma + 1) | 1)  # force odd
+    half = k // 2
+    x = torch.arange(-half, half + 1, dtype=torch.float32, device=device)
+    g = torch.exp(-x.pow(2) / (2 * sigma**2))
+    g = g / g.sum()
+    kernel = g.unsqueeze(0) * g.unsqueeze(1)
+    return kernel.view(1, 1, k, k)
+
+
+def _total_variation(mask: torch.Tensor, beta: float = 3.0) -> torch.Tensor:
+    """TV regularization of a [H, W] mask: mean |∇m|^β (eq. 4 in paper)."""
+    dh = (mask[1:, :] - mask[:-1, :]).abs().pow(beta)
+    dw = (mask[:, 1:] - mask[:, :-1]).abs().pow(beta)
+    return dh.mean() + dw.mean()
 
 
 def meaningful_perturbation(
@@ -51,16 +63,17 @@ def meaningful_perturbation(
     target_class_idx: int,
     replacement_image: torch.Tensor,
     *,
-    area_lambda: float = 8.0,
-    area_lambda_growth: float = 1.0035,
+    area_lambda: float = 1e-4,
+    area_lambda_growth: float = 1.0,
     tv_lambda: float = 1e-2,
+    tv_beta: float = 3.0,
     max_time: float = 60.0,
-    max_iterations: int = 800,
-    learning_rate: float = 0.05,
-    momentum: float = 0.9,
-    mask_step: int = 7,
-    mask_sigma: float = 21.0,
+    max_iterations: int = 300,
+    learning_rate: float = 0.1,
+    mask_step: int = 8,
+    mask_sigma: float = 5.0,
     jitter: bool = True,
+    jitter_tau: int = 4,
     trajectory_log_every: int = 10,
 ) -> MPResult:
     """Run the meaningful-perturbations deletion-game optimization.
@@ -70,16 +83,17 @@ def meaningful_perturbation(
         input_batch: Input image [1, C, H, W] on the model's device.
         target_class_idx: Class index to suppress.
         replacement_image: Replacement tensor [C, H, W] matching input_batch.
-        area_lambda: Initial weight on the mask area penalty (encourages small mask).
-        area_lambda_growth: Per-iteration multiplicative growth factor for area_lambda.
-        tv_lambda: Weight on total-variation smoothness penalty.
+        area_lambda: Weight on mask area penalty λ1 (paper default 1e-4).
+        area_lambda_growth: Per-iteration multiplicative growth for area_lambda (1.0 = fixed).
+        tv_lambda: Weight on TV regularization λ2 (paper default 1e-2).
+        tv_beta: Exponent for TV norm β (paper default 3.0).
         max_time: Wall-clock budget in seconds.
         max_iterations: Hard cap on optimizer iterations.
-        learning_rate: SGD learning rate.
-        momentum: SGD momentum.
-        mask_step: Low-resolution parameterization step (pixels).
-        mask_sigma: MaskGenerator Gaussian kernel sigma.
-        jitter: Horizontal-flip augmentation every other iteration.
+        learning_rate: Adam learning rate (paper default 0.1).
+        mask_step: Downscale factor for low-resolution mask (paper uses 8 -> 28x28 for 224px).
+        mask_sigma: Gaussian blur sigma applied after upsampling (paper default 5.0).
+        jitter: Whether to apply random 2D shift each iteration.
+        jitter_tau: Jitter range in pixels — shift drawn from [0, jitter_tau) (paper default 4).
         trajectory_log_every: Interval between trajectory log entries.
 
     Returns:
@@ -89,26 +103,23 @@ def meaningful_perturbation(
     _, _c, h, w = input_batch.shape
     replacement_batch = replacement_image.unsqueeze(0)  # [1, C, H, W]
 
-    mask_gen = MaskGenerator(
-        shape=(h, w),
-        step=mask_step,
-        sigma=mask_sigma,
-        clamp=True,
-    ).to(device)
-    h_lo, w_lo = mask_gen.shape_in
-    # Start from "delete nothing"; gradients grow the mask toward important regions.
-    pmask = torch.zeros(
-        (1, 1, h_lo, w_lo),
+    mask_h = max(1, h // mask_step)
+    mask_w = max(1, w // mask_step)
+
+    # Sigmoid-parameterized low-res mask; init near 0 (delete nothing).
+    # sigmoid(-4) ≈ 0.018, so the starting mask is nearly transparent.
+    pmask_logits = torch.full(
+        (1, 1, mask_h, mask_w),
+        fill_value=-4.0,
         device=device,
         dtype=input_batch.dtype,
         requires_grad=True,
     )
-    optimizer = torch.optim.SGD(
-        [pmask],
-        lr=learning_rate,
-        momentum=momentum,
-        dampening=0.0,
-    )
+    optimizer = torch.optim.Adam([pmask_logits], lr=learning_rate)
+
+    # Precompute Gaussian kernel (static across iterations).
+    gauss_kernel = _make_gaussian_kernel(mask_sigma, device)
+    gauss_pad = gauss_kernel.shape[-1] // 2
 
     model.eval()
     for param in model.parameters():
@@ -124,34 +135,37 @@ def meaningful_perturbation(
 
         optimizer.zero_grad()
 
-        # mask_cropped: [1, 1, H, W], deletion mask: 1 = replace, 0 = keep
-        mask_cropped, _ = mask_gen.generate(pmask)
+        # Build full-resolution deletion mask: sigmoid → upsample → Gaussian blur → clamp.
+        pmask = torch.sigmoid(pmask_logits)
+        mask_up = F.interpolate(
+            pmask, size=(h, w), mode="bilinear", align_corners=False
+        )
+        mask_smooth = F.conv2d(mask_up, gauss_kernel, padding=gauss_pad).clamp(0.0, 1.0)
 
         inp = input_batch
         repl = replacement_batch
-        if jitter and iteration % 2 == 0:
-            inp = torch.flip(inp, dims=[-1])
-            repl = torch.flip(repl, dims=[-1])
-            perturbed = (1.0 - mask_cropped) * inp + mask_cropped * repl
-            perturbed = torch.flip(perturbed, dims=[-1])
-        else:
-            perturbed = (1.0 - mask_cropped) * inp + mask_cropped * repl
+        if jitter and jitter_tau > 0:
+            dy = random.randint(0, jitter_tau - 1)
+            dx = random.randint(0, jitter_tau - 1)
+            inp = torch.roll(inp, shifts=(dy, dx), dims=(-2, -1))
+            repl = torch.roll(repl, shifts=(dy, dx), dims=(-2, -1))
+
+        # Deletion: mask=1 → replace with repl, mask=0 → keep original.
+        perturbed = (1.0 - mask_smooth) * inp + mask_smooth * repl
 
         logits = model(perturbed)
-        log_probs = F.log_softmax(logits, dim=1)
-        target_logprob = log_probs[0, target_class_idx]
+        probs = F.softmax(logits, dim=1)
+        target_prob = probs[0, target_class_idx]
 
-        mask_2d = mask_cropped.squeeze()  # [H, W]
+        mask_2d = mask_smooth.squeeze()  # [H, W]
         loss = (
-            target_logprob
+            target_prob
             + area_lambda * mask_2d.mean()
-            + tv_lambda * _total_variation(mask_2d)
+            + tv_lambda * _total_variation(mask_2d, beta=tv_beta)
         )
 
         loss.backward()
         optimizer.step()
-        with torch.no_grad():
-            pmask.clamp_(0.0, 1.0)
         area_lambda *= area_lambda_growth
 
         loss_val = float(loss.item())
@@ -162,14 +176,20 @@ def meaningful_perturbation(
             trajectory.append(
                 {
                     "evals": float(iteration),
-                    "best_score": float(-target_logprob.item()),
+                    "best_score": float(-torch.log(target_prob + 1e-10).item()),
                     "time": time.monotonic() - start_time,
                 }
             )
 
     with torch.no_grad():
-        final_mask, _ = mask_gen.generate(pmask)
-        final_mask = final_mask.squeeze()  # [H, W]
+        pmask = torch.sigmoid(pmask_logits)
+        mask_up = F.interpolate(
+            pmask, size=(h, w), mode="bilinear", align_corners=False
+        )
+        final_mask = (
+            F.conv2d(mask_up, gauss_kernel, padding=gauss_pad).squeeze().clamp(0.0, 1.0)
+        )
+
         final_perturbed = (1.0 - final_mask) * input_batch.squeeze(
             0
         ) + final_mask * replacement_image
