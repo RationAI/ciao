@@ -1,0 +1,23 @@
+defaults:
+  - logger: mlflow
+  - data: single_image
+  - model: resnet50
+  - classes: imagenet
+  - replacement: mean_color
+  - _self_
+
+target_class_idx: null
+batch_size: 64
+seed: 42
+
+mp:
+  area: 0.1                    # fraction of pixels to threshold for the final discrete mask
+  area_lambda: 8.0             # weight on mask-area penalty (encourages small deletion mask)
+  tv_lambda: 0.01              # weight on total-variation smoothness penalty
+  max_time: 60.0               # wall-clock budget (seconds)
+  max_iterations: 800          # hard cap on optimizer iterations
+  learning_rate: 0.01          # SGD lr
+  momentum: 0.9                # SGD momentum
+  mask_step: 7                 # low-res mask parameterization step (pixels)
+  mask_sigma: 21.0             # MaskGenerator Gaussian kernel sigma
+  jitter: true                 # h-flip every other iter to reduce corner bias
