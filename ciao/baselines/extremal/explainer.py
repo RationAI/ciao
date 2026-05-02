@@ -65,13 +65,12 @@ class ExtremalPerturbationExplainer:
         target_class_idx: int | None = None,
         area: float = 0.1,
         max_time: float = 60.0,
-        max_iterations: int = 800,
+        max_iterations: int = 1600,
         learning_rate: float = 0.01,
         momentum: float = 0.9,
         mask_step: int = 7,
-        mask_sigma: float = 11.0,
+        mask_sigma: float = 21.0,
         area_lambda: float = 300.0,
-        area_lambda_growth: float = 1.0035,
         jitter: bool = True,
         batch_size: int = 64,
     ) -> tuple[ExplanationResult, EPResult]:
@@ -130,7 +129,6 @@ class ExtremalPerturbationExplainer:
             mask_step=mask_step,
             mask_sigma=mask_sigma,
             area_lambda=area_lambda,
-            area_lambda_growth=area_lambda_growth,
             jitter=jitter,
         )
 
