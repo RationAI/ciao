@@ -1,0 +1,16 @@
+defaults:
+  - logger: mlflow
+  - data: single_image
+  - model: resnet50
+  - classes: imagenet
+  - replacement: mean_color
+  - _self_
+
+target_class_idx: null
+batch_size: 64
+seed: 42
+
+gradcam:
+  variant: gradcam          # "gradcam" or "gradcampp"
+  target_layer: layer4      # dot-separated path to the target conv layer on the model
+  area: 0.1                 # fraction of pixels to keep (top-K thresholding)
