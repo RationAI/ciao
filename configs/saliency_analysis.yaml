@@ -19,7 +19,14 @@ sigma_fraction: 0.09
 
 # Deletion metric — set to true only when GPU/model is available
 compute_deletion: false
-deletion_steps: 10
+deletion_steps: 64
 
-# Log saliency map and deletion curve figures back to MLflow
+# Insertion metric — set to true only when GPU/model is available
+compute_insertion: false
+insertion_steps: 64
+
+# IoU: fraction of top-saliency pixels to threshold against GT mask; null to skip
+iou_top_fraction: null
+
+# Log saliency map and curve figures back to MLflow
 log_figures: true
