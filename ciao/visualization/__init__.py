@@ -1,5 +1,7 @@
 from ciao.visualization.visualization import (
     plot_deletion_curve,
+    plot_heatmap_overlay,
+    plot_insertion_curve,
     plot_overview,
     plot_region_scores,
     plot_regions,
@@ -10,6 +12,8 @@ from ciao.visualization.visualization import (
 
 __all__ = [
     "plot_deletion_curve",
+    "plot_heatmap_overlay",
+    "plot_insertion_curve",
     "plot_overview",
     "plot_region_scores",
     "plot_regions",

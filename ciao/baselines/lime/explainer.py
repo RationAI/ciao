@@ -197,6 +197,13 @@ class LimeExplainer:
             region_result.masked_top_class_name = class_names[target_class_idx]
             region_result.masked_top_prob = original_prob
 
+        # Build a per-pixel soft mask from LIME segment weights (can be negative).
+        soft_mask = torch.zeros(
+            segments.shape, dtype=torch.float32, device=segments.device
+        )
+        for seg_id, weight in segment_weights.items():
+            soft_mask[segments == seg_id] = weight
+
         return ExplanationResult(
             input_batch=input_batch,
             target_class_idx=target_class_idx,
@@ -206,4 +213,5 @@ class LimeExplainer:
             segment_scores=segment_weights,
             regions=[region_result] if kept_region else [],
             replacement_image=replacement_image,
+            soft_mask=soft_mask,
         )
