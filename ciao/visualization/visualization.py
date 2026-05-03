@@ -154,3 +154,91 @@ def plot_soft_mask(result: ExplanationResult) -> Figure:
 
     fig.tight_layout(pad=0.5)
     return fig
+
+
+def plot_heatmap_overlay(result: ExplanationResult, alpha: float = 0.5) -> Figure:
+    """Single image: heatmap overlaid on the original. No title, no axes, no decorations.
+
+    Works for any baseline that sets ``soft_mask`` (GradCAM, Occlusion, MP, LIME).
+    The heatmap is min-max normalised to [0, 1] before display.
+
+    Args:
+        result: ExplanationResult with ``soft_mask`` populated.
+        alpha: Opacity of the heatmap overlay.
+    """
+    if result.soft_mask is None:
+        raise ValueError("soft_mask is not available for this explanation")
+
+    img = _to_hwc(result.input_batch)
+    mask = _to_hw(result.soft_mask)
+
+    mn, mx = float(mask.min()), float(mask.max())
+    mask_norm = (mask - mn) / (mx - mn) if mx > mn else np.zeros_like(mask)
+
+    fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+    ax.imshow(img)
+    ax.imshow(mask_norm, cmap="jet", alpha=alpha, vmin=0.0, vmax=1.0)
+    ax.axis("off")
+    fig.tight_layout(pad=0)
+    return fig
+
+
+def plot_deletion_curve(
+    fractions: np.ndarray,
+    probs: np.ndarray,
+    auc: float | None = None,
+    class_name: str | None = None,
+) -> Figure:
+    """Plot the deletion curve: target class probability vs fraction of pixels deleted."""
+    if auc is None:
+        auc = float(np.trapezoid(probs, fractions))
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.plot(fractions, probs, color="steelblue", linewidth=2)
+    ax.fill_between(
+        fractions, probs, alpha=0.2, color="steelblue", label=f"AUC = {auc:.4f}"
+    )
+    ax.set_xlabel("fraction of pixels deleted")
+    ax.set_ylabel("target class probability")
+    title = "deletion curve" if class_name is None else f"deletion curve — {class_name}"
+    ax.set_title(title)
+    ax.set_xlim(0.0, 1.0)
+    ax.set_ylim(0.0, 1.0)
+    ax.legend()
+    fig.tight_layout()
+    return fig
+
+
+def plot_insertion_curve(
+    fractions: np.ndarray,
+    probs: np.ndarray,
+    auc: float | None = None,
+    class_name: str | None = None,
+) -> Figure:
+    """Plot the insertion curve: target class probability vs fraction of pixels revealed.
+
+    Args:
+        fractions: 1-D array of revealed pixel fractions (x-axis, 0 to 1).
+        probs: 1-D array of target class probabilities at each fraction (y-axis).
+        auc: Pre-computed AUC to annotate on the plot (computed if not provided).
+        class_name: Optional label shown in the figure title.
+    """
+    if auc is None:
+        auc = float(np.trapezoid(probs, fractions))
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.plot(fractions, probs, color="darkorange", linewidth=2)
+    ax.fill_between(
+        fractions, probs, alpha=0.2, color="darkorange", label=f"AUC = {auc:.4f}"
+    )
+    ax.set_xlabel("fraction of pixels revealed")
+    ax.set_ylabel("target class probability")
+    title = (
+        "insertion curve" if class_name is None else f"insertion curve — {class_name}"
+    )
+    ax.set_title(title)
+    ax.set_xlim(0.0, 1.0)
+    ax.set_ylim(0.0, 1.0)
+    ax.legend()
+    fig.tight_layout()
+    return fig

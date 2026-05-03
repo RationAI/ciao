@@ -1,0 +1,29 @@
+defaults:
+  - model: resnet50
+  - classes: imagenet
+  - replacement: mean_color
+  - _self_
+
+tracking_uri: https://mlflow.rationai.cloud.e-infra.cz/
+experiment_name: ???
+
+# Path to the original images (same as data.batch_path used in the explanation job)
+images_path: ???
+
+# Path to ImageNet-S ground truth masks — set to null to skip IoU
+masks_path: null
+
+# Deletion metric
+compute_deletion: false
+deletion_steps: 64
+
+# Insertion metric
+compute_insertion: false
+insertion_steps: 64
+
+# IoU: top fraction of saliency pixels compared against GT mask
+# Set to null to skip IoU (requires masks_path)
+iou_top_fraction: null
+
+# Log deletion/insertion curve figures back to MLflow
+log_figures: true
