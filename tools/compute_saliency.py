@@ -26,15 +26,21 @@ import torch
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 
-from ciao.data.imagenet_s import build_imagenet_s_mapping, load_mask
+from ciao.data.imagenet_s import build_imagenet_s_mapping, get_object_mask, load_mask
 from ciao.data.preprocessing import load_and_preprocess_image
 from ciao.metrics import (
     build_saliency_map,
     compute_deletion_curve,
+    compute_insertion_curve,
+    compute_iou_top_fraction,
     compute_pointing_game,
 )
 from ciao.model.predictor import ModelPredictor
-from ciao.visualization import plot_deletion_curve, plot_saliency_map
+from ciao.visualization import (  # type: ignore[attr-defined]  # plot_insertion_curve added in feat/baselines
+    plot_deletion_curve,
+    plot_insertion_curve,
+    plot_saliency_map,
+)
 
 
 # Run name format produced by the job script: {label}-{seed}-length-{desired_length}
@@ -147,7 +153,7 @@ def main(cfg: DictConfig) -> None:
                 f"Skipping parent run with unexpected name: {parent_run.info.run_name!r}"
             )
             continue
-        algo_key, seed = parsed
+        algo_key, _seed = parsed
         # Recover desired_length from params (more robust than name parsing)
         desired_length_str = parent_run.data.params.get("desired_length")
         if desired_length_str is None:
@@ -164,13 +170,13 @@ def main(cfg: DictConfig) -> None:
     predictor: ModelPredictor | None = None
     replacement_fn = None
 
-    if cfg.compute_deletion:
+    if cfg.compute_deletion or cfg.compute_insertion:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = instantiate(cfg.model).to(device)
         class_names = instantiate(cfg.classes)
         predictor = ModelPredictor(model=model, class_names=class_names)
         replacement_fn = instantiate(cfg.replacement)
-        print(f"Deletion enabled — using device: {device}")
+        print(f"Deletion/insertion enabled — using device: {device}")
 
     images_path = Path(cfg.images_path)
 
@@ -249,14 +255,20 @@ def main(cfg: DictConfig) -> None:
                         mapping=imagenet_s_mapping,
                     )
 
-            # Compute deletion curve + figures (requires model + images)
+            # Compute deletion/insertion curves + figures (requires model + images)
             deletion_auc: float | None = None
             deletion_fractions: np.ndarray | None = None
             deletion_probs: np.ndarray | None = None
+            insertion_auc: float | None = None
+            insertion_fractions: np.ndarray | None = None
+            insertion_probs: np.ndarray | None = None
+            iou: float | None = None
             input_tensor: torch.Tensor | None = None
             class_name: str | None = None
 
-            needs_image = cfg.compute_deletion or cfg.log_figures
+            needs_image = (
+                cfg.compute_deletion or cfg.compute_insertion or cfg.log_figures
+            )
             if needs_image and predictor is not None and replacement_fn is not None:
                 image_path = images_path / image_name
                 if not image_path.exists():
@@ -290,6 +302,50 @@ def main(cfg: DictConfig) -> None:
                             np.trapezoid(deletion_probs, deletion_fractions)
                         )
 
+                    if cfg.compute_insertion:
+                        insertion_fractions, insertion_probs = compute_insertion_curve(
+                            image=input_batch,
+                            saliency_map=saliency_map,
+                            target_class_idx=target_class_idx,
+                            predictor=predictor,
+                            replacement_image=replacement_image,
+                            n_steps=cfg.insertion_steps,
+                        )
+                        insertion_auc = float(
+                            np.trapezoid(insertion_probs, insertion_fractions)
+                        )
+
+            # Compute IoU if masks and top_fraction are configured
+            if (
+                cfg.iou_top_fraction is not None
+                and masks_path is not None
+                and imagenet_s_mapping is not None
+                and target_class_idx is not None
+            ):
+                mask_file = masks_path / (Path(image_name).stem + ".png")
+                if mask_file.exists():
+                    gt_mask = load_mask(mask_file)
+                    object_mask = get_object_mask(
+                        gt_mask, target_class_idx, imagenet_s_mapping
+                    )
+                    if object_mask is not None:
+                        H, W = saliency_map.shape
+                        gt_resized = (
+                            torch.nn.functional.interpolate(
+                                object_mask.float().unsqueeze(0).unsqueeze(0),
+                                size=(H, W),
+                                mode="nearest",
+                            )
+                            .squeeze()
+                            .bool()
+                            .numpy()
+                        )
+                        iou = compute_iou_top_fraction(
+                            saliency_map=saliency_map,
+                            gt_mask=gt_resized,
+                            top_fraction=cfg.iou_top_fraction,
+                        )
+
             # Log back to every child run in this group
             with tempfile.TemporaryDirectory() as _tmpdir:
                 tmp = Path(_tmpdir)
@@ -301,8 +357,12 @@ def main(cfg: DictConfig) -> None:
                         mlflow.log_artifact(str(saliency_path))
                         if deletion_auc is not None:
                             mlflow.log_metric("deletion_auc", deletion_auc)
+                        if insertion_auc is not None:
+                            mlflow.log_metric("insertion_auc", insertion_auc)
                         if pointing_game is not None:
                             mlflow.log_metric("pointing_game", float(pointing_game))
+                        if iou is not None:
+                            mlflow.log_metric("iou", iou)
                         if cfg.log_figures and input_tensor is not None:
                             fig_sal = plot_saliency_map(
                                 input_tensor, saliency_map, class_name
@@ -322,12 +382,29 @@ def main(cfg: DictConfig) -> None:
                             )
                             mlflow.log_figure(fig_del, "figures/deletion_curve.png")
                             plt.close(fig_del)
+                        if (
+                            cfg.log_figures
+                            and insertion_fractions is not None
+                            and insertion_probs is not None
+                        ):
+                            fig_ins = plot_insertion_curve(
+                                insertion_fractions,
+                                insertion_probs,
+                                insertion_auc,
+                                class_name,
+                            )
+                            mlflow.log_figure(fig_ins, "figures/insertion_curve.png")
+                            plt.close(fig_ins)
 
             parts = [f"masks={len(binary_masks)}"]
             if deletion_auc is not None:
                 parts.append(f"deletion_auc={deletion_auc:.4f}")
+            if insertion_auc is not None:
+                parts.append(f"insertion_auc={insertion_auc:.4f}")
             if pointing_game is not None:
                 parts.append(f"pointing_game={'hit' if pointing_game else 'miss'}")
+            if iou is not None:
+                parts.append(f"iou={iou:.4f}")
             print(f"  Done — {', '.join(parts)}")
 
     print(f"\nFinished. Processed {done} (algorithm, image) groups.")
