@@ -35,6 +35,7 @@ from ciao.metrics import (  # type: ignore[attr-defined]  # added in feat/metric
     compute_deletion_curve,
     compute_insertion_curve,
     compute_iou_top_fraction,
+    compute_pointing_game,
 )
 from ciao.model.predictor import ModelPredictor
 from ciao.visualization import plot_deletion_curve, plot_insertion_curve
@@ -134,6 +135,7 @@ def main(cfg: DictConfig) -> None:
         insertion_fractions: np.ndarray | None = None
         insertion_probs: np.ndarray | None = None
         iou: float | None = None
+        pointing_game: bool | None = None
 
         if needs_model and predictor is not None and replacement_fn is not None:
             image_path = images_path / image_name
@@ -174,11 +176,7 @@ def main(cfg: DictConfig) -> None:
                         np.trapezoid(insertion_probs, insertion_fractions)
                     )
 
-        if (
-            masks_path is not None
-            and imagenet_s_mapping is not None
-            and cfg.get("iou_top_fraction") is not None
-        ):
+        if masks_path is not None and imagenet_s_mapping is not None:
             mask_file = masks_path / (Path(image_name).stem + ".png")
             if mask_file.exists():
                 gt_mask_raw = load_mask(mask_file)
@@ -186,20 +184,27 @@ def main(cfg: DictConfig) -> None:
                     gt_mask_raw, target_class_idx, imagenet_s_mapping
                 )
                 if object_mask is not None:
-                    H, W = soft_mask.shape
-                    gt_resized = (
-                        torch.nn.functional.interpolate(
-                            object_mask.float().unsqueeze(0).unsqueeze(0),
-                            size=(H, W),
-                            mode="nearest",
+                    pointing_game = compute_pointing_game(
+                        saliency_map=soft_mask,
+                        target_class_idx=target_class_idx,
+                        gt_mask=gt_mask_raw,
+                        mapping=imagenet_s_mapping,
+                    )
+                    if cfg.get("iou_top_fraction") is not None:
+                        H, W = soft_mask.shape
+                        gt_resized = (
+                            torch.nn.functional.interpolate(
+                                object_mask.float().unsqueeze(0).unsqueeze(0),
+                                size=(H, W),
+                                mode="nearest",
+                            )
+                            .squeeze()
+                            .bool()
+                            .numpy()
                         )
-                        .squeeze()
-                        .bool()
-                        .numpy()
-                    )
-                    iou = compute_iou_top_fraction(
-                        soft_mask, gt_resized, top_fraction=cfg.iou_top_fraction
-                    )
+                        iou = compute_iou_top_fraction(
+                            soft_mask, gt_resized, top_fraction=cfg.iou_top_fraction
+                        )
 
         # Log metrics and figures back to the run.
         with mlflow.start_run(run_id=run_id):
@@ -207,6 +212,8 @@ def main(cfg: DictConfig) -> None:
                 mlflow.log_metric("deletion_auc", deletion_auc)
             if insertion_auc is not None:
                 mlflow.log_metric("insertion_auc", insertion_auc)
+            if pointing_game is not None:
+                mlflow.log_metric("pointing_game", float(pointing_game))
             if iou is not None:
                 mlflow.log_metric(f"iou_top{cfg.iou_top_fraction}", iou)
 
@@ -229,6 +236,8 @@ def main(cfg: DictConfig) -> None:
             parts.append(f"del_auc={deletion_auc:.4f}")
         if insertion_auc is not None:
             parts.append(f"ins_auc={insertion_auc:.4f}")
+        if pointing_game is not None:
+            parts.append(f"pg={'hit' if pointing_game else 'miss'}")
         if iou is not None:
             parts.append(f"iou={iou:.4f}")
         print(f"  Done — {', '.join(parts) if parts else 'no metrics computed'}")
