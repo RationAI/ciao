@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import random
+import tempfile
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
@@ -13,6 +15,7 @@ import torch
 from mlflow.entities import Metric
 
 from ciao.visualization import (
+    plot_heatmap_overlay,
     plot_overview,
     plot_region_scores,
     plot_regions,
@@ -21,8 +24,6 @@ from ciao.visualization import (
 
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from ciao.explainer.ciao_explainer import ExplanationResult
 
 
@@ -152,6 +153,16 @@ def log_figures(results: ExplanationResult) -> None:
         fig = plot_soft_mask(results)
         mlflow.log_figure(fig, "figures/soft_mask.png")
         plt.close(fig)
+
+        fig = plot_heatmap_overlay(results)
+        mlflow.log_figure(fig, "figures/heatmap_overlay.png")
+        plt.close(fig)
+
+        soft_mask_np = results.soft_mask.detach().cpu().float().numpy()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mask_path = Path(tmpdir) / "soft_mask.npy"
+            np.save(mask_path, soft_mask_np)
+            mlflow.log_artifact(str(mask_path))
 
 
 def print_summary(
