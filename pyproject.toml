@@ -28,6 +28,9 @@ dependencies = [
     # Scientific computing
     "numpy>=1.21.0",
 
+    # Model hub
+    "timm>=1.0.0",
+
     # Others
     "tqdm>=4.0.0",
 ]

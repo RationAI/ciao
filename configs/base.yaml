@@ -6,6 +6,7 @@ defaults:
   - classes: imagenet
   - replacement: mean_color
   - segmentation: hexagonal
+  - preprocessing: imagenet
   - _self_
 
 # Explainer hyperparameters
