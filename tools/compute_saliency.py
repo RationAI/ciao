@@ -187,6 +187,9 @@ def main(cfg: DictConfig) -> None:
     # 3. For each (algorithm, image): build saliency map, compute deletion,
     #    log back to every child run in that group.
     # ------------------------------------------------------------------
+    if cfg.get("algo_filter"):
+        grouped = {k: v for k, v in grouped.items() if k.startswith(cfg.algo_filter)}
+
     total_groups = sum(len(imgs) for imgs in grouped.values())
     done = 0
 
