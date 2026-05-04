@@ -84,14 +84,17 @@ def main(cfg: DictConfig) -> None:
             children_by_parent[parent_id].append(run)
 
     # Collect all child runs that have a parent (batch mode) plus any parentless runs.
+    algo_filter: str | None = cfg.get("algo_filter") or None
     image_runs: list[mlflow.entities.Run] = []
-    for parent_id in parent_by_id:
+    for parent_id, parent_run in parent_by_id.items():
+        if algo_filter and not (parent_run.info.run_name or "").startswith(algo_filter):
+            continue
         children = children_by_parent.get(parent_id, [])
         if children:
             image_runs.extend(children)
         else:
             # Single-image run (no batch parent/child nesting).
-            image_runs.append(parent_by_id[parent_id])
+            image_runs.append(parent_run)
 
     # Set up model + replacement for deletion / insertion.
     predictor: ModelPredictor | None = None
