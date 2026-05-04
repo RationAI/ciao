@@ -30,3 +30,6 @@ iou_top_fraction: null
 
 # Log saliency map and curve figures back to MLflow
 log_figures: true
+
+# Optional: only process algo keys that start with this prefix (e.g. "lookahead")
+algo_filter: null
