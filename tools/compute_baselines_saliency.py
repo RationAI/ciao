@@ -30,7 +30,7 @@ from hydra.utils import instantiate
 from omegaconf import DictConfig
 
 from ciao.data.imagenet_s import build_imagenet_s_mapping, get_object_mask, load_mask
-from ciao.data.preprocessing import load_and_preprocess_image
+from ciao.data.preprocessing import load_and_preprocess_image as _default_preprocess
 from ciao.metrics import (  # type: ignore[attr-defined]  # added in feat/metrics
     compute_deletion_curve,
     compute_insertion_curve,
@@ -101,6 +101,12 @@ def main(cfg: DictConfig) -> None:
     replacement_fn = None
     needs_model = cfg.compute_deletion or cfg.compute_insertion
 
+    preprocess_fn = (
+        instantiate(cfg.preprocessing)
+        if "preprocessing" in cfg
+        else _default_preprocess
+    )
+
     if needs_model:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = instantiate(cfg.model).to(device)
@@ -147,9 +153,7 @@ def main(cfg: DictConfig) -> None:
                     f"  WARN: image not found at {image_path} — skipping model metrics"
                 )
             else:
-                input_tensor = load_and_preprocess_image(
-                    image_path, device=predictor.device
-                )
+                input_tensor = preprocess_fn(image_path, device=predictor.device)
                 input_batch = input_tensor.unsqueeze(0)
                 replacement_image = replacement_fn(input_tensor)
 
