@@ -27,3 +27,6 @@ iou_top_fraction: null
 
 # Log deletion/insertion curve figures back to MLflow
 log_figures: true
+
+# Optional: only process runs whose parent run name starts with this prefix (e.g. "gradcam")
+algo_filter: null
