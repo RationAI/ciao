@@ -7,69 +7,43 @@ from ciao.data.constants import IMAGENET_MEAN, IMAGENET_STD
 from ciao.typing import ReplacementFn
 
 
-def calculate_image_mean_color(input_tensor: torch.Tensor) -> torch.Tensor:
-    """Calculate image mean color using ImageNet normalization constants.
+def make_mean_color_replacement(
+    mean: tuple[float, float, float] = IMAGENET_MEAN,
+    std: tuple[float, float, float] = IMAGENET_STD,
+) -> ReplacementFn:
+    """Return a replacement function that fills the image with its per-image mean color.
 
     Args:
-        input_tensor: Input tensor [3, H, W] (ImageNet normalized)
-
-    Returns:
-        Mean color tensor [3, 1, 1] (ImageNet normalized)
+        mean: Per-channel normalization mean used during preprocessing.
+        std: Per-channel normalization std used during preprocessing.
     """
-    device = input_tensor.device
 
-    # Move normalization constants to same device
-    imagenet_mean = torch.tensor(
-        IMAGENET_MEAN, dtype=input_tensor.dtype, device=device
-    ).view(3, 1, 1)
-    imagenet_std = torch.tensor(
-        IMAGENET_STD, dtype=input_tensor.dtype, device=device
-    ).view(3, 1, 1)
+    def replacement(image: torch.Tensor) -> torch.Tensor:
+        device = image.device
+        t_mean = torch.tensor(mean, dtype=image.dtype, device=device).view(3, 1, 1)
+        t_std = torch.tensor(std, dtype=image.dtype, device=device).view(3, 1, 1)
+        unnormalized = (image * t_std) + t_mean
+        mean_color = unnormalized.mean(dim=(1, 2), keepdim=True)
+        normalized_mean = (mean_color - t_mean) / t_std
+        _, height, width = image.shape
+        return normalized_mean.expand(-1, height, width)
 
-    # Unnormalize, calculate mean, then re-normalize
-    unnormalized = (input_tensor * imagenet_std) + imagenet_mean
-    mean_color = unnormalized.mean(dim=(1, 2), keepdim=True)
-    normalized_mean = (mean_color - imagenet_mean) / imagenet_std
-
-    return normalized_mean
-
-
-def mean_color_replacement(image: torch.Tensor) -> torch.Tensor:
-    """Mean color replacement strategy.
-
-    Replaces an image by replacing everything with the global mean color.
-
-    Args:
-        image: Original input tensor of shape (3, H, W).
-
-    Returns:
-        torch.Tensor: Tensor containing just the mean color painted across all pixels.
-    """
-    _, height, width = image.shape
-    mean_color = calculate_image_mean_color(image)
-    return mean_color.expand(-1, height, width)
+    return replacement
 
 
 def imagenet_mean_replacement(image: torch.Tensor) -> torch.Tensor:
-    """ImageNet mean replacement strategy.
-
-    Replaces an image by replacing everything with the dataset-level
-    ImageNet mean color.
+    """Replace the image with the ImageNet dataset mean (zeros in normalized space).
 
     Args:
         image: Original input tensor of shape (3, H, W).
 
     Returns:
-        torch.Tensor: Tensor filled with ImageNet mean in normalized space.
+        Tensor filled with the ImageNet mean in normalized space.
     """
     _, height, width = image.shape
-
-    normalized_mean = torch.zeros(
-        (3, 1, 1),
-        device=image.device,
-        dtype=image.dtype,
+    return torch.zeros((3, 1, 1), device=image.device, dtype=image.dtype).expand(
+        -1, height, width
     )
-    return normalized_mean.expand(-1, height, width)
 
 
 def make_blur_replacement(
@@ -84,7 +58,6 @@ def make_blur_replacement(
     Returns:
         ReplacementFn: A callable that generates a blurred image tensor.
     """
-    # validation
     if any(s <= 0 for s in sigma):
         raise ValueError(f"sigma values must be > 0, got {sigma}")
     if any(k <= 0 or k % 2 == 0 for k in kernel_size):
@@ -133,11 +106,15 @@ def interlacing_replacement(image: torch.Tensor) -> torch.Tensor:
 
 def make_solid_color_replacement(
     color: tuple[int, int, int] = (0, 0, 0),
+    mean: tuple[float, float, float] = IMAGENET_MEAN,
+    std: tuple[float, float, float] = IMAGENET_STD,
 ) -> ReplacementFn:
-    """Return a function that generates a solid-color blackout replacement mask.
+    """Return a function that generates a solid-color replacement image.
 
     Args:
-        color: Solid RGB int bounds.
+        color: Solid RGB values in [0, 255].
+        mean: Per-channel normalization mean used during preprocessing.
+        std: Per-channel normalization std used during preprocessing.
 
     Returns:
         ReplacementFn: A callable outputting a solid RGB normalized color mask.
@@ -151,21 +128,14 @@ def make_solid_color_replacement(
 
     def replacement(image: torch.Tensor) -> torch.Tensor:
         _, height, width = image.shape
-
         color_tensor = torch.tensor(color, dtype=image.dtype, device=image.device).view(
             3, 1, 1
         )
-
-        normalized_color = color_tensor / 255.0
-
-        imagenet_mean = torch.tensor(
-            IMAGENET_MEAN, dtype=image.dtype, device=image.device
-        ).view(3, 1, 1)
-        imagenet_std = torch.tensor(
-            IMAGENET_STD, dtype=image.dtype, device=image.device
-        ).view(3, 1, 1)
-
-        normalized_color = (normalized_color - imagenet_mean) / imagenet_std
+        t_mean = torch.tensor(mean, dtype=image.dtype, device=image.device).view(
+            3, 1, 1
+        )
+        t_std = torch.tensor(std, dtype=image.dtype, device=image.device).view(3, 1, 1)
+        normalized_color = (color_tensor / 255.0 - t_mean) / t_std
         return normalized_color.expand(-1, height, width)
 
     return replacement

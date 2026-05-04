@@ -1,0 +1,2 @@
+_target_: ciao.data.preprocessing.load_and_preprocess_image
+_partial_: true
