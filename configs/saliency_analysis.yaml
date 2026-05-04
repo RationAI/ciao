@@ -2,6 +2,7 @@ defaults:
   - model: resnet50
   - classes: imagenet
   - replacement: mean_color
+  - preprocessing: imagenet
   - _self_
 
 tracking_uri: https://mlflow.rationai.cloud.e-infra.cz/
