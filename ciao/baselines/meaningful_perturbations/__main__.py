@@ -44,6 +44,9 @@ def main(cfg: DictConfig) -> None:
         class_names = instantiate(cfg.classes)
         predictor = ModelPredictor(model=model, class_names=class_names)
 
+        preprocess_fn = (
+            instantiate(cfg.preprocessing) if "preprocessing" in cfg else None
+        )
         explainer = MeaningfulPerturbationsExplainer()
         batch_mode = cfg.data.get("batch_path") is not None
 
@@ -76,6 +79,7 @@ def main(cfg: DictConfig) -> None:
                     jitter=cfg.mp.jitter,
                     jitter_tau=cfg.mp.jitter_tau,
                     batch_size=cfg.batch_size,
+                    preprocess_fn=preprocess_fn,
                 )
 
                 elapsed = time.perf_counter() - start_time

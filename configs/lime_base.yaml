@@ -5,6 +5,7 @@ defaults:
   - classes: imagenet
   - replacement: mean_color
   - segmentation: hexagonal
+  - preprocessing: imagenet
   - _self_
 
 # Shared hyperparameters
@@ -21,4 +22,4 @@ desired_length: 30
 
 # LIME-specific hyperparameters
 lime:
-  n_samples: 1000              # perturbed samples (analog of CIAO's maxEvals)
+  n_samples: 1000 # perturbed samples (analog of CIAO's maxEvals)
