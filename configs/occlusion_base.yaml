@@ -4,6 +4,7 @@ defaults:
   - model: resnet50
   - classes: imagenet
   - replacement: mean_color
+  - preprocessing: imagenet
   - _self_
 
 target_class_idx: null
@@ -11,6 +12,6 @@ batch_size: 64
 seed: 42
 
 occlusion:
-  area: 0.1          # fraction of pixels to keep (top-K thresholding)
-  window_size: 15    # occlusion patch size (pixels)
-  stride: 8          # sliding window stride (pixels)
+  area: 0.1 # fraction of pixels to keep (top-K thresholding)
+  window_size: 15 # occlusion patch size (pixels)
+  stride: 8 # sliding window stride (pixels)

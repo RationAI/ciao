@@ -4,6 +4,7 @@ defaults:
   - model: resnet50
   - classes: imagenet
   - replacement: mean_color
+  - preprocessing: imagenet
   - _self_
 
 target_class_idx: null
@@ -11,15 +12,15 @@ batch_size: 64
 seed: 42
 
 mp:
-  area: 0.1                    # fraction of pixels to threshold for the final discrete mask
-  area_lambda: 0.0001          # weight on mask-area penalty λ1 (paper: 1e-4)
-  area_lambda_growth: 1.0      # per-iteration multiplicative growth (1.0 = fixed, as in paper)
-  tv_lambda: 0.01              # weight on TV regularization λ2 (paper: 1e-2)
-  tv_beta: 3.0                 # TV exponent β (paper: 3.0)
-  max_time: 60.0               # wall-clock budget (seconds)
-  max_iterations: 300          # hard cap on optimizer iterations (paper: 300)
-  learning_rate: 0.1           # Adam lr (paper: 0.1)
-  mask_step: 8                 # downscale factor for low-res mask (paper: 8 → 28×28 for 224px input)
-  mask_sigma: 5.0              # Gaussian blur sigma applied after bilinear upsample (paper: 5.0)
-  jitter: true                 # random 2D shift each iteration to reduce artifact bias
-  jitter_tau: 4                # jitter range in pixels, shift ∈ [0, jitter_tau) (paper: 4)
+  area: 0.1 # fraction of pixels to threshold for the final discrete mask
+  area_lambda: 0.0001 # weight on mask-area penalty λ1 (paper: 1e-4)
+  area_lambda_growth: 1.0 # per-iteration multiplicative growth (1.0 = fixed, as in paper)
+  tv_lambda: 0.01 # weight on TV regularization λ2 (paper: 1e-2)
+  tv_beta: 3.0 # TV exponent β (paper: 3.0)
+  max_time: 60.0 # wall-clock budget (seconds)
+  max_iterations: 300 # hard cap on optimizer iterations (paper: 300)
+  learning_rate: 0.1 # Adam lr (paper: 0.1)
+  mask_step: 8 # downscale factor for low-res mask (paper: 8 → 28×28 for 224px input)
+  mask_sigma: 5.0 # Gaussian blur sigma applied after bilinear upsample (paper: 5.0)
+  jitter: true # random 2D shift each iteration to reduce artifact bias
+  jitter_tau: 4 # jitter range in pixels, shift ∈ [0, jitter_tau) (paper: 4)

@@ -44,6 +44,9 @@ def main(cfg: DictConfig) -> None:
         class_names = instantiate(cfg.classes)
         predictor = ModelPredictor(model=model, class_names=class_names)
 
+        preprocess_fn = (
+            instantiate(cfg.preprocessing) if "preprocessing" in cfg else None
+        )
         explainer = OcclusionExplainer()
         batch_mode = cfg.data.get("batch_path") is not None
 
@@ -67,6 +70,7 @@ def main(cfg: DictConfig) -> None:
                     window_size=cfg.occlusion.window_size,
                     stride=cfg.occlusion.stride,
                     batch_size=cfg.batch_size,
+                    preprocess_fn=preprocess_fn,
                 )
 
                 elapsed = time.perf_counter() - start_time
