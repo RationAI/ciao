@@ -136,12 +136,12 @@ def _create_hexagonal_grid(
 ) -> ImageGraph:
     """Create a grid of hexagons with adjacency list using vectorized operations.
 
-    Uses axial coordinate system for precise hexagonal tiling (flat-top orientation).
+    Uses axial coordinate system for precise hexagonal tiling (pointy-top orientation).
     Each interior hexagon has 6 neighbors; boundary hexagons have fewer.
 
     Args:
         input_tensor: Input image tensor [C, H, W]
-        hex_radius: Hex size parameter (distance from center to flat edge, default: 14)
+        hex_radius: Circumradius of each hexagon in pixels (center to vertex, default: 14)
 
     Returns:
         ImageGraph containing segments tensor and adjacency list
@@ -180,7 +180,7 @@ def make_hexagonal_segmentation(hex_radius: int = 4) -> SegmentationFn:
     """Return a function that segments images into a hexagonal grid.
 
     Args:
-        hex_radius: Distance from hexagon center to flat edge.
+        hex_radius: Circumradius of each hexagon in pixels (center to vertex).
 
     Returns:
         SegmentationFn: A callable that generates a hexagonal ImageGraph.
