@@ -20,6 +20,8 @@ from ciao.scoring.region import (
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from ciao.typing import ReplacementFn, SegmentationFn
 
 
@@ -89,6 +91,7 @@ class LimeExplainer:
         desired_length: int = 30,
         n_samples: int = 1000,
         batch_size: int = 64,
+        preprocess_fn: Callable[..., torch.Tensor] | None = None,
     ) -> ExplanationResult:
         # Validation
         image_path = Path(image_path)
@@ -114,7 +117,10 @@ class LimeExplainer:
             )
 
         # Load and preprocess
-        input_tensor = load_and_preprocess_image(image_path, device=predictor.device)
+        _preprocess = (
+            preprocess_fn if preprocess_fn is not None else load_and_preprocess_image
+        )
+        input_tensor = _preprocess(image_path, device=predictor.device)
         input_batch = input_tensor.unsqueeze(0)
         replacement_image = replacement(input_tensor)
 

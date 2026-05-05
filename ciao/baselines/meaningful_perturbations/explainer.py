@@ -22,6 +22,8 @@ from ciao.scoring.region import (
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from ciao.model.predictor import ModelPredictor
     from ciao.typing import ReplacementFn
 
@@ -72,12 +74,16 @@ class MeaningfulPerturbationsExplainer:
         jitter: bool = True,
         jitter_tau: int = 4,
         batch_size: int = 64,
+        preprocess_fn: Callable[..., torch.Tensor] | None = None,
     ) -> tuple[ExplanationResult, MPResult]:
         image_path = Path(image_path)
         if not image_path.is_file():
             raise FileNotFoundError(f"Image not found at: {image_path}")
 
-        input_tensor = load_and_preprocess_image(image_path, device=predictor.device)
+        _preprocess = (
+            preprocess_fn if preprocess_fn is not None else load_and_preprocess_image
+        )
+        input_tensor = _preprocess(image_path, device=predictor.device)
         input_batch = input_tensor.unsqueeze(0)
         replacement_image = replacement(input_tensor)
 
