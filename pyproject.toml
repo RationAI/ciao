@@ -35,6 +35,13 @@ dependencies = [
 [project.scripts]
 ciao = "ciao.__main__:main"
 
+[project.optional-dependencies]
+funnybirds = [
+    "captum>=0.6.0",
+    "scipy>=1.7.0",
+    "einops>=0.6.0",
+]
+
 [dependency-groups]
 dev = ["mypy", "ruff"]
 test = ["pytest", "pytest-cov"]
