@@ -1,0 +1,24 @@
+repos:
+  # Ruff linter and formatter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Always check for the latest version on their GitHub
+    rev: v0.9.6
+    hooks:
+      # Run the linter and fix whatever it can automatically
+      - id: ruff
+        args: [--fix]
+        exclude: ^funnybirds_eval/
+      # Run the formatter
+      - id: ruff-format
+        exclude: ^funnybirds_eval/
+
+  # Mypy static type checker
+  - repo: local
+    hooks:
+      - id: mypy-local
+        name: mypy (uv)
+        entry: uv run mypy
+        language: system
+        types: [python]
+        require_serial: true
+        exclude: ^funnybirds_eval/
