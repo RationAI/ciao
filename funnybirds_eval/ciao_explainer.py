@@ -36,7 +36,7 @@ import torch
 import torch.nn as nn
 from explainers.explainer_wrapper import AbstractAttributionExplainer
 
-from ciao.algorithm.builder import build_all_regions
+from ciao.algorithm.builder import SeedSelectionMode, build_all_regions
 from ciao.data.constants import IMAGENET_MEAN, IMAGENET_STD
 from ciao.data.replacement import make_solid_color_replacement
 from ciao.data.segmentation import make_hexagonal_segmentation, make_square_segmentation
@@ -128,6 +128,7 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
         max_regions: int = 5,
         desired_length: int = 30,
         ciao_batch_size: int = 16,
+        sigma: SeedSelectionMode = 1,
         mlflow_enabled: bool = False,
     ) -> None:
         # Do not call super().__init__() — we have no Captum explainer object.
@@ -160,6 +161,7 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
         self.max_regions = max_regions
         self.desired_length = desired_length
         self.ciao_batch_size = ciao_batch_size
+        self.sigma = sigma
 
         # Simple single-entry cache so that the two internal explain() calls
         # from get_important_parts → explain() + get_part_importance → explain()
@@ -237,6 +239,7 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
             scores=segment_scores,
             max_regions=self.max_regions,
             original_prob=original_prob,
+            sigma=self.sigma,
             desired_length=self.desired_length,
             batch_size=self.ciao_batch_size,
         )

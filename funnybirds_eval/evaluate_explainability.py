@@ -123,6 +123,13 @@ parser.add_argument(
     type=int,
     help="Lookahead distance (default: 2)",
 )
+parser.add_argument(
+    "--ciao_sigma",
+    default=1,
+    type=int,
+    choices=[-1, 0, 1],
+    help="Seed selection sign: 1=positive evidence, -1=negative evidence, 0=auto (default: 1)",
+)
 
 parser.add_argument(
     "--ciao_mlflow_tracking_uri",
@@ -299,6 +306,7 @@ def main():
             max_regions=args.ciao_max_regions,
             desired_length=args.ciao_desired_length,
             ciao_batch_size=args.ciao_batch_size,
+            sigma=None if args.ciao_sigma == 0 else args.ciao_sigma,
             mlflow_enabled=mlflow_enabled,
         )
     else:
