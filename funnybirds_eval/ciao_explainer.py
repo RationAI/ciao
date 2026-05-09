@@ -33,16 +33,14 @@ import torch.nn as nn
 from explainers.explainer_wrapper import AbstractAttributionExplainer
 
 from ciao.algorithm.builder import build_all_regions
+from ciao.data.replacement import make_solid_color_replacement
 from ciao.data.segmentation import make_hexagonal_segmentation, make_square_segmentation
 from ciao.explainer.explanation_methods import make_lookahead_method
 from ciao.model.predictor import ModelPredictor
 from ciao.scoring.region import log_odds_for_class
 from ciao.scoring.segments import calculate_segment_scores, create_surrogate_dataset
 
-
-def _mean_color_replacement(image: torch.Tensor) -> torch.Tensor:
-    """Return image filled with its own per-channel spatial mean."""
-    return image.mean(dim=(1, 2), keepdim=True).expand_as(image)
+_replacement_fn = make_solid_color_replacement(color=(85, 85, 153))
 
 
 class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
@@ -149,7 +147,7 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
         device = input.device
 
         target_class_idx = None if target is None else int(target.item())
-        replacement_image = _mean_color_replacement(input_3d)
+        replacement_image = _replacement_fn(input_3d)
         image_graph = self.segmentation_fn(input_3d)
 
         original_logits = self.predictor.get_logits(input)
