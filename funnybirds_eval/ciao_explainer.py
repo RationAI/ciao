@@ -40,10 +40,19 @@ from ciao.algorithm.builder import build_all_regions
 from ciao.data.constants import IMAGENET_MEAN, IMAGENET_STD
 from ciao.data.replacement import make_solid_color_replacement
 from ciao.data.segmentation import make_hexagonal_segmentation, make_square_segmentation
-from ciao.explainer.explanation_methods import make_lookahead_method
+from ciao.explainer.explanation_methods import (
+    make_beam_search_method,
+    make_lookahead_method,
+    make_mcgs_method,
+    make_mcts_method,
+    make_potential_method,
+    make_pure_monte_carlo_method,
+    make_ucb_method,
+)
 from ciao.model.predictor import ModelPredictor
 from ciao.scoring.region import log_odds_for_class
 from ciao.scoring.segments import calculate_segment_scores, create_surrogate_dataset
+from ciao.typing import ExplanationMethodFn
 
 matplotlib.use("Agg")
 
@@ -98,15 +107,21 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
         ciao_batch_size: Batch size for CIAO's internal forward-pass loops.
     """
 
-    _METHOD_FACTORIES: ClassVar[dict] = {
-        "lookahead": lambda: make_lookahead_method(lookahead_distance=2),
+    _METHOD_FACTORIES: ClassVar[dict[str, ExplanationMethodFn]] = {
+        "lookahead": make_lookahead_method(lookahead_distance=2),
+        "mcts": make_mcts_method(num_evals=6400, num_rollouts=64),
+        "mcgs": make_mcgs_method(num_evals=6400, num_rollouts=64),
+        "ucb": make_ucb_method(step_budget=64, batch_size=16),
+        "potential": make_potential_method(step_budget=10),
+        "pure_monte_carlo": make_pure_monte_carlo_method(num_evals=100),
+        "beam_search": make_beam_search_method(beam_width=64),
     }
 
     def __init__(
         self,
         model: torch.nn.Module,
         class_names: list[str],
-        method: str = "lookahead",
+        method: str | ExplanationMethodFn = "lookahead",
         segmentation: str = "hex",
         hex_radius: int = 8,
         square_size: int = 8,
@@ -117,7 +132,6 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
     ) -> None:
         # Do not call super().__init__() — we have no Captum explainer object.
         self.explainer = None
-        self.explainer_name = f"CIAO-{method}"
         self.baseline = None
 
         self.predictor = ModelPredictor(model, class_names)
@@ -131,12 +145,17 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
                 f"Unknown segmentation {segmentation!r}. Choose 'hex' or 'square'."
             )
 
-        if method not in self._METHOD_FACTORIES:
+        if callable(method):
+            self.method_fn = method
+            self.explainer_name = f"CIAO-{method.__name__}"
+        elif method in self._METHOD_FACTORIES:
+            self.method_fn = self._METHOD_FACTORIES[method]
+            self.explainer_name = f"CIAO-{method}"
+        else:
             raise ValueError(
                 f"Unknown method {method!r}. "
-                f"Available on this branch: {list(self._METHOD_FACTORIES)}."
+                f"Pass an ExplanationMethodFn or one of: {list(self._METHOD_FACTORIES)}."
             )
-        self.method_fn = self._METHOD_FACTORIES[method]()
 
         self.max_regions = max_regions
         self.desired_length = desired_length

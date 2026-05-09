@@ -60,7 +60,7 @@ parser.add_argument(
 parser.add_argument(
     "--ciao_method",
     default="lookahead",
-    choices=["lookahead"],
+    choices=["lookahead", "mcts", "mcgs", "ucb", "potential", "pure_monte_carlo", "beam_search"],
     help="CIAO search algorithm (default: lookahead)",
 )
 parser.add_argument(
