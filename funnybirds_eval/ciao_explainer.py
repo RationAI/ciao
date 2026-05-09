@@ -50,35 +50,167 @@ from ciao.explainer.explanation_methods import (
     make_ucb_method,
 )
 from ciao.model.predictor import ModelPredictor
-from ciao.scoring.region import log_odds_for_class
+from ciao.scoring.region import RegionResult, log_odds_for_class
 from ciao.scoring.segments import calculate_segment_scores, create_surrogate_dataset
 from ciao.typing import ExplanationMethodFn
+from ciao.visualization.visualization import _region_mask, _segment_boundaries, _to_hwc
 
 matplotlib.use("Agg")
 
-_replacement_fn = make_solid_color_replacement(color=(85, 85, 153))
+_replacement_fn = make_solid_color_replacement(color=(143, 135, 137))
+
+_REGION_COLORS = [
+    (0.9, 0.2, 0.2),   # red
+    (0.2, 0.6, 0.9),   # blue
+    (0.2, 0.8, 0.3),   # green
+    (0.95, 0.7, 0.1),  # yellow
+    (0.8, 0.2, 0.8),   # purple
+]
 
 
-def _make_explanation_figure(
-    image_3hw: torch.Tensor, attribution_hw: torch.Tensor
+def _plot_overview(
+    img: np.ndarray,
+    repl: np.ndarray,
+    segs: np.ndarray,
+    segment_scores: dict[int, float],
 ) -> plt.Figure:
-    mean = torch.tensor(IMAGENET_MEAN).view(3, 1, 1)
-    std = torch.tensor(IMAGENET_STD).view(3, 1, 1)
-    img = (image_3hw.cpu() * std + mean).clamp(0, 1).permute(1, 2, 0).numpy()
+    """original | replacement | segment-score heatmap | segmentation boundaries"""
+    boundaries = _segment_boundaries(segs)
+    seg_overlay = img.copy()
+    seg_overlay[boundaries] = 1.0
 
-    attr = attribution_hw.cpu().numpy()
-    attr_norm = (attr - attr.min()) / (attr.max() - attr.min() + 1e-8)
+    score_map = np.zeros(segs.shape, dtype=np.float32)
+    for seg_id, score in segment_scores.items():
+        score_map[segs == seg_id] = score
+    abs_max = float(np.abs(score_map).max()) or 1.0
 
-    fig, axes = plt.subplots(1, 2, figsize=(8, 4))
-    axes[0].imshow(img)
-    axes[0].set_title("Input")
-    axes[0].axis("off")
-    axes[1].imshow(img)
-    axes[1].imshow(attr_norm, alpha=0.6, cmap="hot")
-    axes[1].set_title("Attribution")
-    axes[1].axis("off")
-    fig.tight_layout()
+    fig, axes = plt.subplots(1, 4, figsize=(20, 5))
+    axes[0].imshow(img);          axes[0].set_title("original");     axes[0].axis("off")
+    axes[1].imshow(repl);         axes[1].set_title("replacement");  axes[1].axis("off")
+    axes[2].imshow(img)
+    axes[2].imshow(score_map, cmap="RdBu_r", vmin=-abs_max, vmax=abs_max, alpha=0.55)
+    axes[2].set_title("segment scores"); axes[2].axis("off")
+    axes[3].imshow(seg_overlay);  axes[3].set_title("segmentation"); axes[3].axis("off")
+    fig.tight_layout(pad=0.5)
     return fig
+
+
+def _plot_region_replacements(
+    img: np.ndarray,
+    repl: np.ndarray,
+    segs: np.ndarray,
+    regions: list[RegionResult],
+) -> plt.Figure:
+    """original | each region replaced individually | all regions replaced"""
+    n = len(regions)
+    ncols = n + 2  # original + per-region + all-replaced
+    fig, axes = plt.subplots(1, ncols, figsize=(5 * ncols, 5))
+
+    axes[0].imshow(img); axes[0].set_title("original"); axes[0].axis("off")
+
+    all_mask = np.zeros(segs.shape, dtype=bool)
+    for idx, rr in enumerate(regions):
+        mask = _region_mask(segs, rr.region)
+        all_mask |= mask
+        single = img.copy()
+        single[mask] = repl[mask]
+        axes[idx + 1].imshow(single)
+        axes[idx + 1].set_title(f"region {idx}\nscore={rr.score:.3f}\ndrop={rr.probability_drop:.3f}")
+        axes[idx + 1].axis("off")
+
+    merged = img.copy()
+    merged[all_mask] = repl[all_mask]
+    axes[-1].imshow(merged); axes[-1].set_title("all replaced"); axes[-1].axis("off")
+
+    fig.tight_layout(pad=0.5)
+    return fig
+
+
+def _plot_heatmap(
+    img: np.ndarray,
+    segs: np.ndarray,
+    regions: list[RegionResult],
+    attr_hw: np.ndarray,
+) -> plt.Figure:
+    """distinct color per region (left) | attribution heatmap overlay (right)"""
+    colored = img.copy()
+    for idx, rr in enumerate(regions):
+        mask = _region_mask(segs, rr.region)
+        color = np.array(_REGION_COLORS[idx % len(_REGION_COLORS)], dtype=np.float32)
+        colored[mask] = colored[mask] * 0.4 + color * 0.6
+
+    attr_norm = (attr_hw - attr_hw.min()) / (attr_hw.max() - attr_hw.min() + 1e-8)
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+    axes[0].imshow(colored); axes[0].set_title("regions (colored)"); axes[0].axis("off")
+    axes[1].imshow(img)
+    axes[1].imshow(attr_norm, cmap="hot", alpha=0.6)
+    axes[1].set_title("attribution heatmap"); axes[1].axis("off")
+    fig.tight_layout(pad=0.5)
+    return fig
+
+
+def _log_funnybirds_sample(
+    input_3d: torch.Tensor,
+    replacement_image: torch.Tensor,
+    segs: np.ndarray,
+    segment_scores: dict[int, float],
+    regions: list[RegionResult],
+    attribution: torch.Tensor,
+    target_class_idx: int,
+    original_prob: float,
+    original_log_odds: float,
+    elapsed: float,
+    predictor: ModelPredictor,
+) -> None:
+    img = _to_hwc(input_3d.unsqueeze(0))
+    repl = _to_hwc(replacement_image.unsqueeze(0))
+
+    # ── Metrics ──────────────────────────────────────────────────────────────
+    mlflow.log_metrics({
+        "target_class_idx": float(target_class_idx),
+        "original_prob": original_prob,
+        "original_log_odds": original_log_odds,
+        "time_seconds": elapsed,
+        "n_regions": float(len(regions)),
+    })
+    for idx, rr in enumerate(regions):
+        mlflow.log_metrics({
+            f"region_{idx}/score": rr.score,
+            f"region_{idx}/original_prob": rr.original_prob,
+            f"region_{idx}/masked_prob": rr.masked_prob,
+            f"region_{idx}/probability_drop": rr.probability_drop,
+            f"region_{idx}/masked_top_prob": rr.masked_top_prob,
+            f"region_{idx}/size_segments": float(len(rr.region)),
+        })
+
+    if regions:
+        all_mask_np = np.zeros(segs.shape, dtype=bool)
+        for rr in regions:
+            all_mask_np |= _region_mask(segs, rr.region)
+        all_mask_t = torch.from_numpy(all_mask_np).to(input_3d.device)
+        composite = input_3d.clone()
+        composite[:, all_mask_t] = replacement_image[:, all_mask_t]
+        with torch.no_grad():
+            comp_logits = predictor.get_logits(composite.unsqueeze(0))
+            comp_prob = float(torch.softmax(comp_logits, dim=1)[0, target_class_idx].item())
+        mlflow.log_metrics({
+            "all_regions/masked_prob": comp_prob,
+            "all_regions/probability_drop": original_prob - comp_prob,
+        })
+
+    # ── Figures ──────────────────────────────────────────────────────────────
+    attr_hw = attribution[0, 0].cpu().numpy()
+
+    fig = _plot_overview(img, repl, segs, segment_scores)
+    mlflow.log_figure(fig, "figures/overview.png"); plt.close(fig)
+
+    if regions:
+        fig = _plot_region_replacements(img, repl, segs, regions)
+        mlflow.log_figure(fig, "figures/regions.png"); plt.close(fig)
+
+    fig = _plot_heatmap(img, segs, regions, attr_hw)
+    mlflow.log_figure(fig, "figures/heatmap.png"); plt.close(fig)
 
 
 class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
@@ -111,7 +243,7 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
         "lookahead": make_lookahead_method(lookahead_distance=2),
         "mcts": make_mcts_method(num_evals=6400, num_rollouts=64),
         "mcgs": make_mcgs_method(num_evals=6400, num_rollouts=64),
-        "ucb": make_ucb_method(step_budget=64, batch_size=16),
+        "ucb": make_ucb_method(step_budget=64, batch_size=64),
         "potential": make_potential_method(step_budget=10),
         "pure_monte_carlo": make_pure_monte_carlo_method(num_evals=100),
         "beam_search": make_beam_search_method(beam_width=64),
@@ -260,26 +392,20 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
 
         if self._mlflow_enabled and mlflow.active_run() is not None:
             elapsed = time.perf_counter() - start_time
-            with mlflow.start_run(
-                run_name=f"sample_{self._sample_count}", nested=True
-            ):
-                mlflow.log_metrics(
-                    {
-                        "target_class_idx": float(target_class_idx),
-                        "original_log_odds": float(original_log_odds_tensor.item()),
-                        "time_seconds": elapsed,
-                    }
+            with mlflow.start_run(run_name=f"sample_{self._sample_count}", nested=True):
+                _log_funnybirds_sample(
+                    input_3d=input_3d,
+                    replacement_image=replacement_image,
+                    segs=image_graph.segments.cpu().numpy(),
+                    segment_scores=segment_scores,
+                    regions=regions,
+                    attribution=attribution,
+                    target_class_idx=target_class_idx,
+                    original_prob=original_prob,
+                    original_log_odds=float(original_log_odds_tensor.item()),
+                    elapsed=elapsed,
+                    predictor=self.predictor,
                 )
-                for idx, rr in enumerate(regions):
-                    mlflow.log_metrics(
-                        {
-                            f"region_{idx}/score": rr.score,
-                            f"region_{idx}/size_segments": float(len(rr.region)),
-                        }
-                    )
-                fig = _make_explanation_figure(input_3d, attribution[0, 0])
-                mlflow.log_figure(fig, "figures/explanation.png")
-                plt.close(fig)
             self._sample_count += 1
 
         return attribution
