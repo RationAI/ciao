@@ -100,6 +100,25 @@ parser.add_argument(
     help="Internal batch size for CIAO forward passes (default: 16)",
 )
 
+parser.add_argument(
+    "--ciao_mlflow_tracking_uri",
+    default=None,
+    type=str,
+    help="MLflow tracking URI (omit to disable logging)",
+)
+parser.add_argument(
+    "--ciao_mlflow_experiment",
+    default="ciao-funnybirds",
+    type=str,
+    help="MLflow experiment name (default: ciao-funnybirds)",
+)
+parser.add_argument(
+    "--ciao_mlflow_run_name",
+    default=None,
+    type=str,
+    help="MLflow parent run name",
+)
+
 parser.add_argument("--gpu", default=0, type=int, help="GPU id to use.")
 parser.add_argument("--seed", default=0, type=int, help="seed")
 parser.add_argument(
@@ -169,6 +188,22 @@ def main():
     random.seed(args.seed)
     torch.manual_seed(args.seed)
 
+    mlflow_enabled = args.explainer == "CIAO" and args.ciao_mlflow_tracking_uri is not None
+    if mlflow_enabled:
+        import mlflow
+        mlflow.set_tracking_uri(args.ciao_mlflow_tracking_uri)
+        mlflow.set_experiment(args.ciao_mlflow_experiment)
+        parent_run = mlflow.start_run(run_name=args.ciao_mlflow_run_name)
+        mlflow.log_params({
+            "method": args.ciao_method,
+            "segmentation": args.ciao_segmentation,
+            "hex_radius": args.ciao_hex_radius,
+            "max_regions": args.ciao_max_regions,
+            "desired_length": args.ciao_desired_length,
+            "ciao_batch_size": args.ciao_batch_size,
+            "nr_itrs": args.nr_itrs,
+        })
+
     # create model
     if args.model == "resnet50":
         model = resnet50(num_classes=50)
@@ -222,6 +257,7 @@ def main():
             max_regions=args.ciao_max_regions,
             desired_length=args.ciao_desired_length,
             ciao_batch_size=args.ciao_batch_size,
+            mlflow_enabled=mlflow_enabled,
         )
     else:
         print("Explainer not implemented")
@@ -284,6 +320,20 @@ def main():
         f"{accuracy}\t{round(csdc[best_threshold], 5)}\t{round(pc[best_threshold], 5)}\t{round(dc[best_threshold], 5)}\t{round(distractibility[best_threshold], 5)}\t{background_independence}\t{sd}\t{ts}"
     )
     print("Best threshold:", best_threshold)
+
+    if mlflow_enabled:
+        mlflow.log_metrics({
+            "accuracy": accuracy,
+            "csdc": round(csdc[best_threshold], 5),
+            "pc": round(pc[best_threshold], 5),
+            "dc": round(dc[best_threshold], 5),
+            "distractibility": round(distractibility[best_threshold], 5),
+            "background_independence": background_independence,
+            "sd": sd,
+            "ts": ts,
+            "best_threshold": best_threshold,
+        })
+        mlflow.end_run()
 
 
 if __name__ == "__main__":

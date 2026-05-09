@@ -25,14 +25,19 @@ Requirements:
 
 from __future__ import annotations
 
+import time
 from typing import ClassVar
 
+import matplotlib
+import matplotlib.pyplot as plt
+import mlflow
 import numpy as np
 import torch
 import torch.nn as nn
 from explainers.explainer_wrapper import AbstractAttributionExplainer
 
 from ciao.algorithm.builder import build_all_regions
+from ciao.data.constants import IMAGENET_MEAN, IMAGENET_STD
 from ciao.data.replacement import make_solid_color_replacement
 from ciao.data.segmentation import make_hexagonal_segmentation, make_square_segmentation
 from ciao.explainer.explanation_methods import make_lookahead_method
@@ -40,7 +45,31 @@ from ciao.model.predictor import ModelPredictor
 from ciao.scoring.region import log_odds_for_class
 from ciao.scoring.segments import calculate_segment_scores, create_surrogate_dataset
 
+matplotlib.use("Agg")
+
 _replacement_fn = make_solid_color_replacement(color=(85, 85, 153))
+
+
+def _make_explanation_figure(
+    image_3hw: torch.Tensor, attribution_hw: torch.Tensor
+) -> plt.Figure:
+    mean = torch.tensor(IMAGENET_MEAN).view(3, 1, 1)
+    std = torch.tensor(IMAGENET_STD).view(3, 1, 1)
+    img = (image_3hw.cpu() * std + mean).clamp(0, 1).permute(1, 2, 0).numpy()
+
+    attr = attribution_hw.cpu().numpy()
+    attr_norm = (attr - attr.min()) / (attr.max() - attr.min() + 1e-8)
+
+    fig, axes = plt.subplots(1, 2, figsize=(8, 4))
+    axes[0].imshow(img)
+    axes[0].set_title("Input")
+    axes[0].axis("off")
+    axes[1].imshow(img)
+    axes[1].imshow(attr_norm, alpha=0.6, cmap="hot")
+    axes[1].set_title("Attribution")
+    axes[1].axis("off")
+    fig.tight_layout()
+    return fig
 
 
 class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
@@ -84,6 +113,7 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
         max_regions: int = 5,
         desired_length: int = 30,
         ciao_batch_size: int = 16,
+        mlflow_enabled: bool = False,
     ) -> None:
         # Do not call super().__init__() — we have no Captum explainer object.
         self.explainer = None
@@ -118,6 +148,9 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
         self._cache_key: tuple[int, int | None] | None = None
         self._cached_attribution: torch.Tensor | None = None
 
+        self._mlflow_enabled = mlflow_enabled
+        self._sample_count = 0
+
     # ------------------------------------------------------------------
     # Core explain method
     # ------------------------------------------------------------------
@@ -140,6 +173,8 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
         cache_key = (id(input), None if target is None else int(target.item()))
         if cache_key == self._cache_key and self._cached_attribution is not None:
             return self._cached_attribution
+
+        start_time = time.perf_counter()
 
         assert input.shape[0] == 1, "FunnyBirds evaluation requires batch size 1."
         input_3d = input.squeeze(0)  # [3, H, W]
@@ -200,6 +235,31 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
 
         self._cache_key = cache_key
         self._cached_attribution = attribution
+
+        if self._mlflow_enabled and mlflow.active_run() is not None:
+            elapsed = time.perf_counter() - start_time
+            with mlflow.start_run(
+                run_name=f"sample_{self._sample_count}", nested=True
+            ):
+                mlflow.log_metrics(
+                    {
+                        "target_class_idx": float(target_class_idx),
+                        "original_log_odds": float(original_log_odds_tensor.item()),
+                        "time_seconds": elapsed,
+                    }
+                )
+                for idx, rr in enumerate(regions):
+                    mlflow.log_metrics(
+                        {
+                            f"region_{idx}/score": rr.score,
+                            f"region_{idx}/size_segments": float(len(rr.region)),
+                        }
+                    )
+                fig = _make_explanation_figure(input_3d, attribution[0, 0])
+                mlflow.log_figure(fig, "figures/explanation.png")
+                plt.close(fig)
+            self._sample_count += 1
+
         return attribution
 
     # ------------------------------------------------------------------
