@@ -66,7 +66,7 @@ parser.add_argument(
 parser.add_argument(
     "--ciao_segmentation",
     default="hex",
-    choices=["hex", "square"],
+    choices=["hex", "square", "slic"],
     help="CIAO segmentation type (default: hex)",
 )
 parser.add_argument(
@@ -80,6 +80,18 @@ parser.add_argument(
     default=8,
     type=int,
     help="Square patch edge length in pixels for square segmentation (default: 8)",
+)
+parser.add_argument(
+    "--ciao_slic_n_segments",
+    default=200,
+    type=int,
+    help="Target number of segments for SLIC segmentation (default: 200)",
+)
+parser.add_argument(
+    "--ciao_slic_compactness",
+    default=10.0,
+    type=float,
+    help="Compactness parameter for SLIC segmentation (default: 10.0)",
 )
 parser.add_argument(
     "--ciao_max_regions",
@@ -303,6 +315,8 @@ def main():
             segmentation=args.ciao_segmentation,
             hex_radius=args.ciao_hex_radius,
             square_size=args.ciao_square_size,
+            slic_n_segments=args.ciao_slic_n_segments,
+            slic_compactness=args.ciao_slic_compactness,
             max_regions=args.ciao_max_regions,
             desired_length=args.ciao_desired_length,
             ciao_batch_size=args.ciao_batch_size,

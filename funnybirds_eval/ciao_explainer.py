@@ -39,7 +39,7 @@ from explainers.explainer_wrapper import AbstractAttributionExplainer
 from ciao.algorithm.builder import SeedSelectionMode, build_all_regions
 from ciao.data.constants import IMAGENET_MEAN, IMAGENET_STD
 from ciao.data.replacement import make_solid_color_replacement
-from ciao.data.segmentation import make_hexagonal_segmentation, make_square_segmentation
+from ciao.data.segmentation import make_hexagonal_segmentation, make_slic_segmentation, make_square_segmentation
 from ciao.explainer.explanation_methods import (
     make_beam_search_method,
     make_lookahead_method,
@@ -257,6 +257,8 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
         segmentation: str = "hex",
         hex_radius: int = 8,
         square_size: int = 8,
+        slic_n_segments: int = 200,
+        slic_compactness: float = 10.0,
         max_regions: int = 5,
         desired_length: int = 30,
         ciao_batch_size: int = 16,
@@ -273,9 +275,11 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
             self.segmentation_fn = make_hexagonal_segmentation(hex_radius=hex_radius)
         elif segmentation == "square":
             self.segmentation_fn = make_square_segmentation(square_size=square_size)
+        elif segmentation == "slic":
+            self.segmentation_fn = make_slic_segmentation(n_segments=slic_n_segments, compactness=slic_compactness)
         else:
             raise ValueError(
-                f"Unknown segmentation {segmentation!r}. Choose 'hex' or 'square'."
+                f"Unknown segmentation {segmentation!r}. Choose 'hex', 'square', or 'slic'."
             )
 
         if callable(method):
