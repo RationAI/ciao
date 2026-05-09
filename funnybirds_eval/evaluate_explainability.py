@@ -99,6 +99,30 @@ parser.add_argument(
     type=int,
     help="Internal batch size for CIAO forward passes (default: 16)",
 )
+parser.add_argument(
+    "--ciao_step_budget",
+    default=64,
+    type=int,
+    help="Step budget for UCB/potential (default: 64)",
+)
+parser.add_argument(
+    "--ciao_num_evals",
+    default=6400,
+    type=int,
+    help="Eval budget for MCTS/MCGS (default: 6400)",
+)
+parser.add_argument(
+    "--ciao_num_rollouts",
+    default=64,
+    type=int,
+    help="Rollouts per iteration for MCTS/MCGS (default: 64)",
+)
+parser.add_argument(
+    "--ciao_lookahead_distance",
+    default=2,
+    type=int,
+    help="Lookahead distance (default: 2)",
+)
 
 parser.add_argument(
     "--ciao_mlflow_tracking_uri",
@@ -119,7 +143,7 @@ parser.add_argument(
     help="MLflow parent run name",
 )
 
-parser.add_argument("--gpu", default=0, type=int, help="GPU id to use.")
+parser.add_argument("--gpu", default=0, type=int, help="GPU id to use, or -1 for CPU.")
 parser.add_argument("--seed", default=0, type=int, help="seed")
 parser.add_argument(
     "--batch_size",
@@ -183,7 +207,7 @@ parser.add_argument(
 
 def main():
     args = parser.parse_args()
-    device = "cuda:" + str(args.gpu)
+    device = "cpu" if args.gpu < 0 else f"cuda:{args.gpu}"
 
     random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -244,13 +268,31 @@ def main():
     elif args.explainer == "CustomExplainer":
         ...
     elif args.explainer == "CIAO":
+        from ciao.explainer.explanation_methods import (
+            make_beam_search_method,
+            make_lookahead_method,
+            make_mcgs_method,
+            make_mcts_method,
+            make_potential_method,
+            make_pure_monte_carlo_method,
+            make_ucb_method,
+        )
         from explainers.ciao_explainer import CIAOFunnyBirdsExplainer
 
+        _method_map = {
+            "lookahead": make_lookahead_method(args.ciao_lookahead_distance),
+            "mcts": make_mcts_method(args.ciao_num_evals, args.ciao_num_rollouts),
+            "mcgs": make_mcgs_method(args.ciao_num_evals, args.ciao_num_rollouts),
+            "ucb": make_ucb_method(step_budget=args.ciao_step_budget, batch_size=args.ciao_batch_size),
+            "potential": make_potential_method(step_budget=args.ciao_step_budget),
+            "pure_monte_carlo": make_pure_monte_carlo_method(num_evals=args.ciao_num_evals),
+            "beam_search": make_beam_search_method(),
+        }
         class_names = [str(i) for i in range(50)]
         explainer = CIAOFunnyBirdsExplainer(
             model=model,
             class_names=class_names,
-            method=args.ciao_method,
+            method=_method_map[args.ciao_method],
             segmentation=args.ciao_segmentation,
             hex_radius=args.ciao_hex_radius,
             square_size=args.ciao_square_size,
