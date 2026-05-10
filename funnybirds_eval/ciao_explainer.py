@@ -126,6 +126,43 @@ def _plot_region_replacements(
     return fig
 
 
+def _plot_region_boundaries(
+    img: np.ndarray,
+    repl: np.ndarray,
+    segs: np.ndarray,
+    regions: list[RegionResult],
+) -> plt.Figure:
+    """Same layout as regions.png but with a black boundary drawn around each replaced region."""
+    from scipy.ndimage import binary_dilation
+
+    n = len(regions)
+    ncols = n + 2
+    fig, axes = plt.subplots(1, ncols, figsize=(5 * ncols, 5))
+
+    axes[0].imshow(img); axes[0].set_title("original"); axes[0].axis("off")
+
+    all_mask = np.zeros(segs.shape, dtype=bool)
+    for idx, rr in enumerate(regions):
+        mask = _region_mask(segs, rr.region)
+        all_mask |= mask
+        single = img.copy()
+        single[mask] = repl[mask]
+        boundary = binary_dilation(mask, iterations=2) & ~mask
+        single[boundary] = 0.0
+        axes[idx + 1].imshow(single)
+        axes[idx + 1].set_title(f"region {idx}\nscore={rr.score:.3f}\ndrop={rr.probability_drop:.3f}")
+        axes[idx + 1].axis("off")
+
+    merged = img.copy()
+    merged[all_mask] = repl[all_mask]
+    all_boundary = binary_dilation(all_mask, iterations=2) & ~all_mask
+    merged[all_boundary] = 0.0
+    axes[-1].imshow(merged); axes[-1].set_title("all replaced"); axes[-1].axis("off")
+
+    fig.tight_layout(pad=0.5)
+    return fig
+
+
 def _plot_heatmap(
     img: np.ndarray,
     segs: np.ndarray,
@@ -208,6 +245,9 @@ def _log_funnybirds_sample(
     if regions:
         fig = _plot_region_replacements(img, repl, segs, regions)
         mlflow.log_figure(fig, "figures/regions.png"); plt.close(fig)
+
+        fig = _plot_region_boundaries(img, repl, segs, regions)
+        mlflow.log_figure(fig, "figures/regions_boundary.png"); plt.close(fig)
 
     fig = _plot_heatmap(img, segs, regions, attr_hw)
     mlflow.log_figure(fig, "figures/heatmap.png"); plt.close(fig)
