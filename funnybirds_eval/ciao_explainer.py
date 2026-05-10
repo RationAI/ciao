@@ -163,6 +163,23 @@ def _plot_region_boundaries(
     return fig
 
 
+def _plot_region_spotlight(
+    img: np.ndarray,
+    segs: np.ndarray,
+    regions: list[RegionResult],
+) -> plt.Figure:
+    """Original image with only region pixels visible; everything else is black."""
+    spotlight = np.zeros_like(img)
+    for rr in regions:
+        mask = _region_mask(segs, rr.region)
+        spotlight[mask] = img[mask]
+
+    fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+    ax.imshow(spotlight); ax.set_title("regions only"); ax.axis("off")
+    fig.tight_layout(pad=0.5)
+    return fig
+
+
 def _plot_heatmap(
     img: np.ndarray,
     segs: np.ndarray,
@@ -248,6 +265,9 @@ def _log_funnybirds_sample(
 
         fig = _plot_region_boundaries(img, repl, segs, regions)
         mlflow.log_figure(fig, "figures/regions_boundary.png"); plt.close(fig)
+
+        fig = _plot_region_spotlight(img, segs, regions)
+        mlflow.log_figure(fig, "figures/regions_spotlight.png"); plt.close(fig)
 
     fig = _plot_heatmap(img, segs, regions, attr_hw)
     mlflow.log_figure(fig, "figures/heatmap.png"); plt.close(fig)
