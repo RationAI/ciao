@@ -213,7 +213,7 @@ def _plot_heatmap(
     region_mask = attr_hw > 0
     attr_disp = np.where(region_mask, attr_hw, np.nan)
 
-    cmap = plt.cm.inferno.copy()
+    cmap = plt.cm.RdBu_r.copy()
     cmap.set_bad(alpha=0)
 
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
@@ -231,11 +231,36 @@ def _plot_heatmap_clean(img: np.ndarray, attr_hw: np.ndarray) -> plt.Figure:
     region_mask = attr_hw > 0
     attr_disp = np.where(region_mask, attr_hw, np.nan)
 
-    cmap = plt.cm.inferno.copy()
+    cmap = plt.cm.RdBu_r.copy()
     cmap.set_bad(alpha=0)
 
     fig, ax = plt.subplots(figsize=(5, 5))
     ax.imshow(img)
+    if region_mask.any():
+        ax.imshow(attr_disp, cmap=cmap, vmin=0, vmax=float(np.nanmax(attr_disp)), alpha=0.75)
+    ax.axis("off")
+    fig.tight_layout(pad=0)
+    return fig
+
+
+def _plot_heatmap_boundaries(img: np.ndarray, segs: np.ndarray, regions: list[RegionResult], attr_hw: np.ndarray) -> plt.Figure:
+    """Attribution heatmap overlay with black boundaries drawn around each region."""
+    from scipy.ndimage import binary_dilation
+
+    region_mask = attr_hw > 0
+    attr_disp   = np.where(region_mask, attr_hw, np.nan)
+
+    cmap = plt.cm.RdBu_r.copy()
+    cmap.set_bad(alpha=0)
+
+    canvas = img.copy()
+    for rr in regions:
+        mask     = _region_mask(segs, rr.region)
+        boundary = binary_dilation(mask, iterations=2) & ~mask
+        canvas[boundary] = 0.0
+
+    fig, ax = plt.subplots(figsize=(5, 5))
+    ax.imshow(canvas)
     if region_mask.any():
         ax.imshow(attr_disp, cmap=cmap, vmin=0, vmax=float(np.nanmax(attr_disp)), alpha=0.75)
     ax.axis("off")
@@ -378,6 +403,10 @@ def _log_funnybirds_sample(
     # Standalone clean heatmap (thesis-ready)
     fig = _plot_heatmap_clean(img, attr_hw)
     mlflow.log_figure(fig, "figures/heatmap_clean.png"); plt.close(fig)
+
+    # Clean heatmap with black region boundaries
+    fig = _plot_heatmap_boundaries(img, segs, regions, attr_hw)
+    mlflow.log_figure(fig, "figures/heatmap_boundaries.png"); plt.close(fig)
 
     # Ground truth parts (if available)
     if part_map_hw3 is not None:
