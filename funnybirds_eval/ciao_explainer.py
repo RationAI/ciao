@@ -25,7 +25,10 @@ Requirements:
 
 from __future__ import annotations
 
+import json
+import tempfile
 import time
+from pathlib import Path
 from typing import ClassVar
 
 import matplotlib
@@ -67,6 +70,20 @@ _REGION_COLORS = [
     (0.8, 0.2, 0.8),   # purple
 ]
 
+# FunnyBirds semantic part colours → (display name, RGB display colour)
+_PART_DISPLAY: dict[tuple[int, int, int], tuple[str, tuple[float, float, float]]] = {
+    (255, 255, 253): ("eye",  (0.2, 0.85, 0.95)),
+    (255, 255, 254): ("eye",  (0.2, 0.85, 0.95)),
+    (255, 255,   0): ("beak", (1.0, 0.90, 0.00)),
+    (255,   0,   1): ("foot", (0.9, 0.50, 0.10)),
+    (255,   0,   2): ("foot", (0.9, 0.50, 0.10)),
+    (  0, 255,   1): ("wing", (0.2, 0.90, 0.30)),
+    (  0, 255,   2): ("wing", (0.2, 0.90, 0.30)),
+    (  0,   0, 255): ("tail", (0.7, 0.20, 0.90)),
+}
+
+
+# ── Plot helpers ───────────────────────────────────────────────────────────────
 
 def _plot_overview(
     img: np.ndarray,
@@ -85,12 +102,12 @@ def _plot_overview(
     abs_max = float(np.abs(score_map).max()) or 1.0
 
     fig, axes = plt.subplots(1, 4, figsize=(20, 5))
-    axes[0].imshow(img);          axes[0].set_title("original");     axes[0].axis("off")
-    axes[1].imshow(repl);         axes[1].set_title("replacement");  axes[1].axis("off")
+    axes[0].imshow(img);          axes[0].set_title("original");          axes[0].axis("off")
+    axes[1].imshow(repl);         axes[1].set_title("replacement");        axes[1].axis("off")
     axes[2].imshow(img)
     axes[2].imshow(score_map, cmap="RdBu_r", vmin=-abs_max, vmax=abs_max, alpha=0.55)
-    axes[2].set_title("segment scores"); axes[2].axis("off")
-    axes[3].imshow(seg_overlay);  axes[3].set_title("segmentation"); axes[3].axis("off")
+    axes[2].set_title("segment scores");                                   axes[2].axis("off")
+    axes[3].imshow(seg_overlay);  axes[3].set_title("segmentation");       axes[3].axis("off")
     fig.tight_layout(pad=0.5)
     return fig
 
@@ -103,7 +120,7 @@ def _plot_region_replacements(
 ) -> plt.Figure:
     """original | each region replaced individually | all regions replaced"""
     n = len(regions)
-    ncols = n + 2  # original + per-region + all-replaced
+    ncols = n + 2
     fig, axes = plt.subplots(1, ncols, figsize=(5 * ncols, 5))
 
     axes[0].imshow(img); axes[0].set_title("original"); axes[0].axis("off")
@@ -186,23 +203,74 @@ def _plot_heatmap(
     regions: list[RegionResult],
     attr_hw: np.ndarray,
 ) -> plt.Figure:
-    """distinct color per region (left) | attribution heatmap overlay (right)"""
+    """colored-region overlay (left) | inferno attribution heatmap (right)"""
     colored = img.copy()
     for idx, rr in enumerate(regions):
         mask = _region_mask(segs, rr.region)
         color = np.array(_REGION_COLORS[idx % len(_REGION_COLORS)], dtype=np.float32)
         colored[mask] = colored[mask] * 0.4 + color * 0.6
 
-    attr_norm = (attr_hw - attr_hw.min()) / (attr_hw.max() - attr_hw.min() + 1e-8)
+    region_mask = attr_hw > 0
+    attr_disp = np.where(region_mask, attr_hw, np.nan)
+
+    cmap = plt.cm.inferno.copy()
+    cmap.set_bad(alpha=0)
 
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-    axes[0].imshow(colored); axes[0].set_title("regions (colored)"); axes[0].axis("off")
+    axes[0].imshow(colored);  axes[0].set_title("regions (colored)"); axes[0].axis("off")
     axes[1].imshow(img)
-    axes[1].imshow(attr_norm, cmap="hot", alpha=0.6)
+    if region_mask.any():
+        axes[1].imshow(attr_disp, cmap=cmap, vmin=0, vmax=float(np.nanmax(attr_disp)), alpha=0.75)
     axes[1].set_title("attribution heatmap"); axes[1].axis("off")
     fig.tight_layout(pad=0.5)
     return fig
 
+
+def _plot_heatmap_clean(img: np.ndarray, attr_hw: np.ndarray) -> plt.Figure:
+    """Standalone attribution heatmap: inferno overlay, non-region pixels transparent."""
+    region_mask = attr_hw > 0
+    attr_disp = np.where(region_mask, attr_hw, np.nan)
+
+    cmap = plt.cm.inferno.copy()
+    cmap.set_bad(alpha=0)
+
+    fig, ax = plt.subplots(figsize=(5, 5))
+    ax.imshow(img)
+    if region_mask.any():
+        ax.imshow(attr_disp, cmap=cmap, vmin=0, vmax=float(np.nanmax(attr_disp)), alpha=0.75)
+    ax.axis("off")
+    fig.tight_layout(pad=0)
+    return fig
+
+
+def _plot_ground_truth(img: np.ndarray, part_map_hw3: np.ndarray) -> plt.Figure:
+    """original (left) | semantic part overlay with legend (right)"""
+    overlay = img.copy()
+    legend_patches = []
+    seen: set[str] = set()
+
+    for rgb, (part_name, color) in _PART_DISPLAY.items():
+        mask = np.all(part_map_hw3 == np.array(rgb, dtype=np.uint8), axis=-1)
+        if not mask.any():
+            continue
+        c = np.array(color, dtype=np.float32)
+        overlay[mask] = img[mask] * 0.3 + c * 0.7
+        if part_name not in seen:
+            legend_patches.append(
+                plt.Rectangle((0, 0), 1, 1, fc=color, label=part_name)
+            )
+            seen.add(part_name)
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+    axes[0].imshow(img);     axes[0].set_title("original");         axes[0].axis("off")
+    axes[1].imshow(overlay); axes[1].set_title("ground truth parts"); axes[1].axis("off")
+    if legend_patches:
+        axes[1].legend(handles=legend_patches, loc="lower right", fontsize=9)
+    fig.tight_layout(pad=0.5)
+    return fig
+
+
+# ── Per-sample MLflow logging ──────────────────────────────────────────────────
 
 def _log_funnybirds_sample(
     input_3d: torch.Tensor,
@@ -216,11 +284,13 @@ def _log_funnybirds_sample(
     original_log_odds: float,
     elapsed: float,
     predictor: ModelPredictor,
+    part_map_hw3: np.ndarray | None = None,
 ) -> None:
-    img = _to_hwc(input_3d.unsqueeze(0))
+    img  = _to_hwc(input_3d.unsqueeze(0))            # [H, W, 3] float32 [0, 1]
     repl = _to_hwc(replacement_image.unsqueeze(0))
+    attr_hw = attribution[0, 0].cpu().numpy()
 
-    # ── Metrics ──────────────────────────────────────────────────────────────
+    # ── Scalar metrics ────────────────────────────────────────────────────────
     mlflow.log_metrics({
         "target_class_idx": float(target_class_idx),
         "original_prob": original_prob,
@@ -243,19 +313,51 @@ def _log_funnybirds_sample(
         for rr in regions:
             all_mask_np |= _region_mask(segs, rr.region)
         all_mask_t = torch.from_numpy(all_mask_np).to(input_3d.device)
-        composite = input_3d.clone()
+        composite  = input_3d.clone()
         composite[:, all_mask_t] = replacement_image[:, all_mask_t]
         with torch.no_grad():
             comp_logits = predictor.get_logits(composite.unsqueeze(0))
-            comp_prob = float(torch.softmax(comp_logits, dim=1)[0, target_class_idx].item())
+            comp_prob   = float(torch.softmax(comp_logits, dim=1)[0, target_class_idx].item())
         mlflow.log_metrics({
             "all_regions/masked_prob": comp_prob,
             "all_regions/probability_drop": original_prob - comp_prob,
         })
 
-    # ── Figures ──────────────────────────────────────────────────────────────
-    attr_hw = attribution[0, 0].cpu().numpy()
+    # ── Numpy / JSON artifacts ────────────────────────────────────────────────
+    with tempfile.TemporaryDirectory() as tmpdir:
+        td = Path(tmpdir)
+        np.save(td / "original.npy",      img)
+        np.save(td / "attribution.npy",   attr_hw)
+        np.save(td / "segmentation.npy",  segs)
 
+        regions_data = [
+            {
+                "segment_ids":    sorted(rr.region),
+                "score":          rr.score,
+                "probability_drop": rr.probability_drop,
+                "original_prob":  rr.original_prob,
+                "masked_prob":    rr.masked_prob,
+            }
+            for rr in regions
+        ]
+        with open(td / "regions.json", "w") as f:
+            json.dump(regions_data, f, indent=2)
+
+        with open(td / "segment_scores.json", "w") as f:
+            json.dump({str(k): v for k, v in segment_scores.items()}, f)
+
+        if part_map_hw3 is not None:
+            np.save(td / "part_map.npy", part_map_hw3)
+
+        mlflow.log_artifacts(str(td), artifact_path="artifacts")
+
+    # ── Figures ───────────────────────────────────────────────────────────────
+    # Standalone original (no axes, no title)
+    fig, ax = plt.subplots(figsize=(5, 5))
+    ax.imshow(img); ax.axis("off"); fig.tight_layout(pad=0)
+    mlflow.log_figure(fig, "figures/original.png"); plt.close(fig)
+
+    # Debug overview: original | replacement | segment scores | boundaries
     fig = _plot_overview(img, repl, segs, segment_scores)
     mlflow.log_figure(fig, "figures/overview.png"); plt.close(fig)
 
@@ -269,9 +371,21 @@ def _log_funnybirds_sample(
         fig = _plot_region_spotlight(img, segs, regions)
         mlflow.log_figure(fig, "figures/regions_spotlight.png"); plt.close(fig)
 
+    # Two-panel heatmap: colored regions | inferno overlay
     fig = _plot_heatmap(img, segs, regions, attr_hw)
     mlflow.log_figure(fig, "figures/heatmap.png"); plt.close(fig)
 
+    # Standalone clean heatmap (thesis-ready)
+    fig = _plot_heatmap_clean(img, attr_hw)
+    mlflow.log_figure(fig, "figures/heatmap_clean.png"); plt.close(fig)
+
+    # Ground truth parts (if available)
+    if part_map_hw3 is not None:
+        fig = _plot_ground_truth(img, part_map_hw3)
+        mlflow.log_figure(fig, "figures/ground_truth.png"); plt.close(fig)
+
+
+# ── Explainer class ────────────────────────────────────────────────────────────
 
 class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
     """CIAO search-algorithm adapter for FunnyBirds evaluation.
@@ -283,19 +397,12 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
     Args:
         model:          FunnyBirds model (nn.Module, already on the target device).
         class_names:    List of class name strings, length == num_classes.
-        method:         Search algorithm.  Currently only 'lookahead' is
-                        available on this branch; other methods can be added
-                        after merging feat/mcts-algorithm etc.
-        segmentation:   'hex' or 'square'.
-        hex_radius:     Circumradius of each hexagon in pixels (used when
-                        segmentation='hex').  Default 8 gives ~395 segments
-                        for a 256x256 image, fine enough to resolve individual
-                        bird parts.
-        square_size:    Edge length of each square patch (used when
-                        segmentation='square').
+        method:         Search algorithm.
+        segmentation:   'hex', 'square', or 'slic'.
+        hex_radius:     Circumradius of each hexagon in pixels.
+        square_size:    Edge length of each square patch.
         max_regions:    Maximum number of non-overlapping regions to find.
-        desired_length: Target number of segments per region.  Tune to cover
-                        roughly one bird part (8-30 segments with hex_radius=8).
+        desired_length: Target number of segments per region.
         ciao_batch_size: Batch size for CIAO's internal forward-pass loops.
     """
 
@@ -327,7 +434,7 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
     ) -> None:
         # Do not call super().__init__() — we have no Captum explainer object.
         self.explainer = None
-        self.baseline = None
+        self.baseline  = None
 
         self.predictor = ModelPredictor(model, class_names)
 
@@ -354,19 +461,23 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
                 f"Pass an ExplanationMethodFn or one of: {list(self._METHOD_FACTORIES)}."
             )
 
-        self.max_regions = max_regions
+        self.max_regions    = max_regions
         self.desired_length = desired_length
         self.ciao_batch_size = ciao_batch_size
-        self.sigma = sigma
+        self.sigma          = sigma
 
         # Simple single-entry cache so that the two internal explain() calls
         # from get_important_parts → explain() + get_part_importance → explain()
         # only run the expensive CIAO pipeline once per sample.
         self._cache_key: tuple[int, int | None] | None = None
-        self._cached_attribution: torch.Tensor | None = None
+        self._cached_attribution: torch.Tensor | None  = None
 
         self._mlflow_enabled = mlflow_enabled
-        self._sample_count = 0
+        self._sample_count   = 0
+
+        # Pending log: set after CIAO runs, flushed in get_part_importance()
+        # (where the FunnyBirds part_map is available).
+        self._pending_log: dict | None = None
 
     # ------------------------------------------------------------------
     # Core explain method
@@ -391,24 +502,29 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
         if cache_key == self._cache_key and self._cached_attribution is not None:
             return self._cached_attribution
 
+        # ── Flush any stale pending log (previous sample, no part_map call) ──
+        if self._mlflow_enabled and mlflow.active_run() is not None and self._pending_log is not None:
+            with mlflow.start_run(run_name=f"sample_{self._sample_count}", nested=True):
+                _log_funnybirds_sample(**self._pending_log, part_map_hw3=None)
+            self._sample_count += 1
+            self._pending_log = None
+
         start_time = time.perf_counter()
 
         assert input.shape[0] == 1, "FunnyBirds evaluation requires batch size 1."
         input_3d = input.squeeze(0)  # [3, H, W]
-        H, W = input_3d.shape[1], input_3d.shape[2]
-        device = input.device
+        H, W     = input_3d.shape[1], input_3d.shape[2]
+        device   = input.device
 
         target_class_idx = None if target is None else int(target.item())
         replacement_image = _replacement_fn(input_3d)
-        image_graph = self.segmentation_fn(input_3d)
+        image_graph       = self.segmentation_fn(input_3d)
 
         original_logits = self.predictor.get_logits(input)
         if target_class_idx is None:
             target_class_idx = int(original_logits.argmax(dim=1)[0].item())
 
-        original_log_odds_tensor = log_odds_for_class(
-            original_logits, target_class_idx
-        )[0]
+        original_log_odds_tensor = log_odds_for_class(original_logits, target_class_idx)[0]
         original_prob = float(
             torch.softmax(original_logits, dim=1)[0, target_class_idx].item()
         )
@@ -451,26 +567,25 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
                 mask[segments_map == seg_id] = 1.0
             attribution[0, 0] += mask * region_result.score
 
-        self._cache_key = cache_key
+        self._cache_key          = cache_key
         self._cached_attribution = attribution
 
+        # ── Stash everything for deferred logging in get_part_importance() ────
         if self._mlflow_enabled and mlflow.active_run() is not None:
             elapsed = time.perf_counter() - start_time
-            with mlflow.start_run(run_name=f"sample_{self._sample_count}", nested=True):
-                _log_funnybirds_sample(
-                    input_3d=input_3d,
-                    replacement_image=replacement_image,
-                    segs=image_graph.segments.cpu().numpy(),
-                    segment_scores=segment_scores,
-                    regions=regions,
-                    attribution=attribution,
-                    target_class_idx=target_class_idx,
-                    original_prob=original_prob,
-                    original_log_odds=float(original_log_odds_tensor.item()),
-                    elapsed=elapsed,
-                    predictor=self.predictor,
-                )
-            self._sample_count += 1
+            self._pending_log = dict(
+                input_3d=input_3d,
+                replacement_image=replacement_image,
+                segs=image_graph.segments.cpu().numpy(),
+                segment_scores=segment_scores,
+                regions=regions,
+                attribution=attribution,
+                target_class_idx=target_class_idx,
+                original_prob=original_prob,
+                original_log_odds=float(original_log_odds_tensor.item()),
+                elapsed=elapsed,
+                predictor=self.predictor,
+            )
 
         return attribution
 
@@ -489,6 +604,16 @@ class CIAOFunnyBirdsExplainer(AbstractAttributionExplainer):
         """Sum the CIAO attribution map over each dilated part region."""
         assert image.shape[0] == 1
         attribution = self.explain(image, target=target)
+
+        # ── Flush pending log now that we have the part_map ───────────────────
+        if self._mlflow_enabled and mlflow.active_run() is not None and self._pending_log is not None:
+            part_map_hw3 = (
+                part_map[0].permute(1, 2, 0).cpu().numpy().astype(np.uint8)
+            )
+            with mlflow.start_run(run_name=f"sample_{self._sample_count}", nested=True):
+                _log_funnybirds_sample(**self._pending_log, part_map_hw3=part_map_hw3)
+            self._sample_count += 1
+            self._pending_log = None
 
         dilation = nn.MaxPool2d(5, stride=1, padding=2)
         part_importances: dict[str, float] = {}
