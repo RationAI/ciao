@@ -4,7 +4,7 @@ Logs results back to the existing nested runs.
 
 Usage (Hydra CLI):
     uv run python tools/compute_saliency.py \
-        images_path=/mnt/projects/explainability/ciao/imagenet_s/comparison/images \
+        images_path=CIAO_DATA_ROOT/imagenet_s/comparison/images \
         experiment_name=algorithm-comparison-imagenet-s \
         compute_deletion=true
 
@@ -182,7 +182,7 @@ def main(cfg: DictConfig) -> None:
         class_names = instantiate(cfg.classes)
         predictor = ModelPredictor(model=model, class_names=class_names)
         replacement_fn = instantiate(cfg.replacement)
-        print(f"Deletion/insertion enabled — using device: {device}")
+        print(f"Deletion/insertion enabled â€” using device: {device}")
 
     images_path = Path(cfg.images_path)
 
@@ -214,7 +214,7 @@ def main(cfg: DictConfig) -> None:
                 if seg is None:
                     print(
                         f"  WARN: segments.npy missing for run {run_id} "
-                        f"(length={desired_length}) — skipping this length"
+                        f"(length={desired_length}) â€” skipping this length"
                     )
                     continue
 
@@ -225,11 +225,11 @@ def main(cfg: DictConfig) -> None:
                 if region_segs is None:
                     print(
                         f"  WARN: no region segments found for run {run_id} "
-                        f"(length={desired_length}) — skipping this length"
+                        f"(length={desired_length}) â€” skipping this length"
                     )
                     continue
 
-                # Union of all regions → single binary mask for this run
+                # Union of all regions â†’ single binary mask for this run
                 all_ids = [sid for region in region_segs for sid in region]
                 if all_ids:
                     binary_masks.append(_build_binary_mask(seg, all_ids))
@@ -241,7 +241,9 @@ def main(cfg: DictConfig) -> None:
                         target_class_idx = int(tc)
 
             if not binary_masks:
-                print(f"  WARN: no usable masks for {algo_key}/{image_name} — skipping")
+                print(
+                    f"  WARN: no usable masks for {algo_key}/{image_name} â€” skipping"
+                )
                 continue
 
             saliency_map = build_saliency_map(
@@ -282,7 +284,7 @@ def main(cfg: DictConfig) -> None:
                 image_path = images_path / image_name
                 if not image_path.exists():
                     print(
-                        f"  WARN: image not found at {image_path} — skipping deletion/figures"
+                        f"  WARN: image not found at {image_path} â€” skipping deletion/figures"
                     )
                 else:
                     input_tensor = preprocess_fn(image_path, device=predictor.device)
@@ -412,7 +414,7 @@ def main(cfg: DictConfig) -> None:
                 parts.append(f"pointing_game={'hit' if pointing_game else 'miss'}")
             if iou is not None:
                 parts.append(f"iou={iou:.4f}")
-            print(f"  Done — {', '.join(parts)}")
+            print(f"  Done â€” {', '.join(parts)}")
 
     print(f"\nFinished. Processed {done} (algorithm, image) groups.")
 

@@ -7,7 +7,7 @@ to the existing per-image child runs.
 
 Usage (Hydra CLI):
     uv run python tools/compute_baselines_saliency.py \
-        images_path=/mnt/projects/explainability/ciao/imagenet_s/comparison/images \
+        images_path=CIAO_DATA_ROOT/imagenet_s/comparison/images \
         experiment_name=baseline-comparison \
         compute_deletion=true \
         compute_insertion=true \
@@ -113,7 +113,7 @@ def main(cfg: DictConfig) -> None:
         class_names = instantiate(cfg.classes)
         predictor = ModelPredictor(model=model, class_names=class_names)
         replacement_fn = instantiate(cfg.replacement)
-        print(f"Model loaded — using device: {device}")
+        print(f"Model loaded â€” using device: {device}")
 
     images_path = Path(cfg.images_path)
     masks_path = Path(cfg.masks_path) if cfg.get("masks_path") else None
@@ -127,12 +127,12 @@ def main(cfg: DictConfig) -> None:
 
         soft_mask = _load_soft_mask(client, run_id)
         if soft_mask is None:
-            print("  WARN: soft_mask.npy missing — skipping")
+            print("  WARN: soft_mask.npy missing â€” skipping")
             continue
 
         target_class_idx_str = run.data.params.get("target_class_idx")
         if target_class_idx_str is None:
-            print("  WARN: target_class_idx param missing — skipping")
+            print("  WARN: target_class_idx param missing â€” skipping")
             continue
         target_class_idx = int(target_class_idx_str)
         class_name = run.data.params.get("class_name")
@@ -150,7 +150,7 @@ def main(cfg: DictConfig) -> None:
             image_path = images_path / image_name
             if not image_path.exists():
                 print(
-                    f"  WARN: image not found at {image_path} — skipping model metrics"
+                    f"  WARN: image not found at {image_path} â€” skipping model metrics"
                 )
             else:
                 input_tensor = preprocess_fn(image_path, device=predictor.device)
@@ -247,7 +247,7 @@ def main(cfg: DictConfig) -> None:
             parts.append(f"pg={'hit' if pointing_game else 'miss'}")
         if iou is not None:
             parts.append(f"iou={iou:.4f}")
-        print(f"  Done — {', '.join(parts) if parts else 'no metrics computed'}")
+        print(f"  Done â€” {', '.join(parts) if parts else 'no metrics computed'}")
 
     print(f"\nFinished. Processed {total} runs.")
 

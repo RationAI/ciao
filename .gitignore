@@ -175,3 +175,7 @@ jobs_testing/
 
 images/
 jobs/
+thesis_figures/output
+result_images/
+funnybirds-framework/
+trash/
