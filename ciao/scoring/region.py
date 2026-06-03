@@ -77,7 +77,9 @@ def log_odds_for_class(logits: torch.Tensor, target_class_idx: int) -> torch.Ten
     Computed in the numerically stable form ``z_c - logsumexp_{j != c}(z_j)``.
     """
     target_logit = logits[:, target_class_idx]
-    others = torch.cat([logits[:, :target_class_idx], logits[:, target_class_idx + 1:]], dim=1)
+    others = torch.cat(
+        [logits[:, :target_class_idx], logits[:, target_class_idx + 1 :]], dim=1
+    )
     return target_logit - torch.logsumexp(others, dim=1)
 
 
@@ -134,7 +136,9 @@ def calculate_region_deltas(
     input_batch, replacement_image, gpu_segments = _prepare_tensors_for_model(
         predictor, input_batch, replacement_image, segments
     )
-    original_log_odds = original_log_odds.to(device=predictor.device, dtype=input_batch.dtype)
+    original_log_odds = original_log_odds.to(
+        device=predictor.device, dtype=input_batch.dtype
+    )
 
     with torch.no_grad():
         all_deltas: list[float] = []
