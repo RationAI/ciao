@@ -171,4 +171,12 @@ cython_debug/
 .idea/
 
 jobs_testing/
+jobs/
 .claude/
+
+# Local outputs and external frameworks
+images/
+result_images/
+thesis_figures/
+trash/
+funnybirds-framework/
