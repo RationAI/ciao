@@ -45,7 +45,8 @@ def build_region_greedy_lookahead(
 
     eval_count = 0
     trajectory: list[dict[str, float]] = []
-    current_best_score = -float("inf")
+    current_best_objective = -float("inf")  # sign-normalized, for comparisons only
+    current_best_score = 0.0  # raw score, always set before first use
     t0 = time.monotonic()
 
     # Grow region one step at a time
@@ -86,8 +87,9 @@ def build_region_greedy_lookahead(
         first_step = candidates[best_region]
 
         signed_best = best_score * optimization_sign
-        if signed_best > current_best_score:
-            current_best_score = signed_best
+        if signed_best > current_best_objective:
+            current_best_objective = signed_best
+            current_best_score = best_score
         trajectory.append(
             {
                 "evals": eval_count,
@@ -121,6 +123,8 @@ def build_region_greedy_lookahead(
             original_log_odds=ctx.original_log_odds,
         )[0]
         eval_count += 1
+        if final_score * optimization_sign > current_best_objective:
+            current_best_score = final_score
         trajectory.append(
             {
                 "evals": eval_count,
