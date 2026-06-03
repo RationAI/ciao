@@ -62,14 +62,7 @@ def imagenet_mean_replacement(image: torch.Tensor) -> torch.Tensor:
     Returns:
         torch.Tensor: Tensor filled with ImageNet mean in normalized space.
     """
-    _, height, width = image.shape
-
-    normalized_mean = torch.zeros(
-        (3, 1, 1),
-        device=image.device,
-        dtype=image.dtype,
-    )
-    return normalized_mean.expand(-1, height, width)
+    return torch.zeros_like(image)
 
 
 def make_blur_replacement(
