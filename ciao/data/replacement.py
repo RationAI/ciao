@@ -54,13 +54,14 @@ def imagenet_mean_replacement(image: torch.Tensor) -> torch.Tensor:
     """ImageNet mean replacement strategy.
 
     Replaces an image by replacing everything with the dataset-level
-    ImageNet mean color.
+    ImageNet mean color. Assumes the input is already ImageNet-normalized,
+    under which the dataset mean maps to the zero tensor.
 
     Args:
-        image: Original input tensor of shape (3, H, W).
+        image: ImageNet-normalized input tensor of shape (3, H, W).
 
     Returns:
-        torch.Tensor: Tensor filled with ImageNet mean in normalized space.
+        torch.Tensor: Zero tensor of the same shape, dtype, and device as input.
     """
     return torch.zeros_like(image)
 

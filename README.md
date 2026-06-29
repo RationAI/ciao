@@ -80,7 +80,7 @@ uv run python -m ciao
 ### Replacement Methods
 
 - **Mean Color**: Replace masked regions with the image's mean color (normalized)
-- **ImageNet Mean**: Replace masked regions with the dataset ImageNet mean color
+- **ImageNet Mean**: Replace masked regions with the ImageNet dataset mean (zero tensor under ImageNet normalization)
 - **Blur**: Gaussian blur applied to masked regions
 - **Interlacing**: Interlaced pattern replacement
 - **Solid Color**: Replace with a specified solid color (RGB)
