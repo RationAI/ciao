@@ -11,6 +11,7 @@ defaults:
 # Explainer hyperparameters
 target_class_idx: null
 max_regions: 1
+sigma: null
 desired_length: 30
 batch_size: 64
 seed: 42

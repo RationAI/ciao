@@ -75,14 +75,25 @@ def _log_trajectory(run_id: str, results: ExplanationResult) -> None:
     """Batch-log per-region trajectory points to MLflow."""
     ts_ms = int(time.time() * 1000)
     trajectory_metrics = [
-        Metric(
-            key=f"region_{idx}/trajectory_best_score",
-            value=item["best_score"],
-            timestamp=ts_ms,
-            step=int(item["evals"]),
-        )
+        metric
         for idx, region in enumerate(results.regions)
-        for item in region.trajectory
+        # Deduplicate by evals: multiple iterations may share the same eval_count
+        # (e.g. cached terminal hits in MCGS), which would violate MLflow's metric PK.
+        for item in {item["evals"]: item for item in region.trajectory}.values()
+        for metric in (
+            Metric(
+                key=f"region_{idx}/trajectory_best_score",
+                value=item["best_score"],
+                timestamp=ts_ms,
+                step=int(item["evals"]),
+            ),
+            Metric(
+                key=f"region_{idx}/trajectory_time",
+                value=item["time"],
+                timestamp=ts_ms,
+                step=int(item["evals"]),
+            ),
+        )
     ]
     if not trajectory_metrics:
         return
@@ -96,15 +107,18 @@ def _log_trajectory(run_id: str, results: ExplanationResult) -> None:
 
 
 def _log_explanation_results(
-    run_id: str, results: ExplanationResult, elapsed: float
+    run_id: str,
+    results: ExplanationResult,
+    elapsed: float,
 ) -> None:
-    """Log explanation params, per-region metrics, trajectory, and timing to MLflow."""
+    """Log explanation params, baseline log-odds, per-region metrics, trajectory, and timing to MLflow."""
     mlflow.log_params(
         {
             "target_class_idx": results.target_class_idx,
             "class_name": results.class_name,
         }
     )
+    mlflow.log_metric("original_log_odds", results.original_log_odds)
 
     for idx, region in enumerate(results.regions):
         mlflow.log_metrics(
@@ -126,6 +140,17 @@ def _log_explanation_results(
         mlflow.log_dict(
             {"segments": sorted(region.region)},
             f"region_{idx}/segments.json",
+        )
+
+    if (
+        results.combined_score is not None
+        and results.combined_probability_drop is not None
+    ):
+        mlflow.log_metrics(
+            {
+                "all_regions/final_score": results.combined_score,
+                "all_regions/probability_drop": results.combined_probability_drop,
+            }
         )
 
     _log_trajectory(run_id, results)
@@ -207,6 +232,7 @@ def main(cfg: DictConfig) -> None:
                     predictor=predictor,
                     target_class_idx=cfg.target_class_idx,
                     max_regions=cfg.max_regions,
+                    sigma=cfg.sigma,
                     desired_length=cfg.desired_length,
                     batch_size=cfg.batch_size,
                     segmentation=segmentation,

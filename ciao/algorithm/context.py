@@ -15,6 +15,7 @@ class SearchContext:
     replacement_image: torch.Tensor
     image_graph: ImageGraph
     target_class_idx: int
+    original_log_odds: torch.Tensor
     seed_idx: int
     optimization_sign: int
     used_segments: frozenset[int]

@@ -5,10 +5,15 @@ from pathlib import Path
 
 import torch
 
-from ciao.algorithm.builder import build_all_regions
+from ciao.algorithm.builder import SeedSelectionMode, build_all_regions
 from ciao.data.preprocessing import load_and_preprocess_image
 from ciao.model.predictor import ModelPredictor
-from ciao.scoring.region import RegionResult
+from ciao.scoring.region import (
+    RegionResult,
+    calculate_region_deltas,
+    calculate_region_probability_drops,
+    log_odds_for_class,
+)
 from ciao.scoring.segments import (
     calculate_segment_scores,
     create_surrogate_dataset,
@@ -23,10 +28,13 @@ class ExplanationResult:
     input_batch: torch.Tensor
     target_class_idx: int
     class_name: str
+    original_log_odds: float
     segments: torch.Tensor
     segment_scores: dict[int, float]  # Segment ID -> score
     regions: list[RegionResult]
     replacement_image: torch.Tensor
+    combined_score: float | None = None
+    combined_probability_drop: float | None = None
 
 
 class CIAOExplainer:
@@ -45,6 +53,7 @@ class CIAOExplainer:
         replacement: ReplacementFn,
         target_class_idx: int | None = None,
         max_regions: int = 10,
+        sigma: SeedSelectionMode = None,
         desired_length: int = 30,
         batch_size: int = 64,
     ) -> ExplanationResult:
@@ -58,6 +67,9 @@ class CIAOExplainer:
             replacement: Replacement strategy function generating an obfuscation mask.
             target_class_idx: Target class to explain (None = auto-select)
             max_regions: Maximum number of regions to build
+            sigma: Seed selection mode for the outer region builder. ``None``
+                picks max abs score and then inherits its sign, ``1`` targets positive evidence,
+                ``-1`` targets negative evidence.
             desired_length: Target number of segments per region (default=30)
             batch_size: Batch size for model evaluation
 
@@ -113,15 +125,24 @@ class CIAOExplainer:
                 f"input_tensor device ({input_tensor.device})"
             )
 
-        # 3. Get target class
+        # 3. Compute base logits/probabilities once and resolve target class.
+        original_logits = predictor.get_logits(input_batch)
+        original_probs = torch.nn.functional.softmax(original_logits, dim=1)
+
         if target_class_idx is None:
-            target_class_idx = predictor.get_predicted_class(input_batch)
+            target_class_idx = int(original_logits.argmax(dim=1)[0].item())
 
             if target_class_idx < 0 or target_class_idx >= len(class_names):
                 raise ValueError(
                     f"Model predicted class index {target_class_idx}, but class_names "
                     f"only has {len(class_names)} items. Check predictor configuration."
                 )
+
+        original_prob = float(original_probs[0, target_class_idx].item())
+        original_log_odds_tensor = log_odds_for_class(
+            original_logits, target_class_idx
+        )[0]
+        original_log_odds = float(original_log_odds_tensor.item())
 
         # 4. Create segmentation
         image_graph = segmentation(input_tensor)
@@ -133,6 +154,7 @@ class CIAOExplainer:
             replacement_image=replacement_image,
             image_graph=image_graph,
             target_class_idx=target_class_idx,
+            original_log_odds=original_log_odds_tensor,
             batch_size=batch_size,
         )
         segment_scores = calculate_segment_scores(X, y)
@@ -145,11 +167,44 @@ class CIAOExplainer:
             replacement_image=replacement_image,
             image_graph=image_graph,
             target_class_idx=target_class_idx,
+            original_log_odds=original_log_odds_tensor,
             scores=segment_scores,
             max_regions=max_regions,
+            original_prob=original_prob,
+            sigma=sigma,
             desired_length=desired_length,
             batch_size=batch_size,
         )
+
+        combined_score: float | None = None
+        combined_probability_drop: float | None = None
+        if len(regions) == 1:
+            combined_score = regions[0].score
+            combined_probability_drop = regions[0].probability_drop
+        elif len(regions) > 1:
+            union = frozenset().union(*[r.region for r in regions])
+            combined_score = calculate_region_deltas(
+                predictor=predictor,
+                input_batch=input_batch,
+                segments=image_graph.segments,
+                segment_sets=[union],
+                replacement_image=replacement_image,
+                target_class_idx=target_class_idx,
+                original_log_odds=original_log_odds_tensor,
+                batch_size=batch_size,
+            )[0]
+            temp = RegionResult(region=union, score=0.0)
+            calculate_region_probability_drops(
+                predictor=predictor,
+                input_batch=input_batch,
+                segments=image_graph.segments,
+                replacement_image=replacement_image,
+                target_class_idx=target_class_idx,
+                original_prob=original_prob,
+                results=[temp],
+                batch_size=batch_size,
+            )
+            combined_probability_drop = temp.probability_drop
 
         class_name = class_names[target_class_idx]
 
@@ -161,4 +216,7 @@ class CIAOExplainer:
             regions=regions,
             class_name=class_name,
             replacement_image=replacement_image,
+            original_log_odds=original_log_odds,
+            combined_score=combined_score,
+            combined_probability_drop=combined_probability_drop,
         )
