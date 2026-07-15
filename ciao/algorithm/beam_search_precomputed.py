@@ -71,13 +71,11 @@ def build_region_beam_search(
         batch_size=1,
     )[0]
 
-    signed_final = final_score * ctx.optimization_sign
-
     return RegionResult(
         region=best_region,
         score=final_score,
         evaluations_count=1,
         trajectory=[
-            {"evals": 1, "best_score": signed_final, "time": time.monotonic() - t0}
+            {"evals": 1, "best_score": final_score, "time": time.monotonic() - t0}
         ],
     )
