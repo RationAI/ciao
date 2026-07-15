@@ -68,7 +68,7 @@ def build_region_pure_monte_carlo(
         trajectory.append(
             {
                 "evals": len(scores),
-                "best_score": best_signed,
+                "best_score": best_signed * ctx.optimization_sign,
                 "time": time.monotonic() - t0,
             }
         )
