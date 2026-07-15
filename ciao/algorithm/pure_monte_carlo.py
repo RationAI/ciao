@@ -61,10 +61,10 @@ def build_region_pure_monte_carlo(
             original_log_odds=ctx.original_log_odds,
             batch_size=batch_size,
         )
+        batch_signed = [s * ctx.optimization_sign for s in batch_scores]
         scores.extend(batch_scores)
-        for s in batch_scores:
-            signed_scores.append(s * ctx.optimization_sign)
-        best_signed = max(best_signed, max(signed_scores[-len(batch_scores) :]))
+        signed_scores.extend(batch_signed)
+        best_signed = max(best_signed, max(batch_signed))
         trajectory.append(
             {
                 "evals": len(scores),
@@ -91,14 +91,6 @@ def build_region_pure_monte_carlo(
 
     # Score any leftover uniques that didn't fill a full batch before the loop exited.
     flush_pending()
-
-    if not scores:
-        return RegionResult(
-            region=seed_region,
-            score=0.0,
-            evaluations_count=0,
-            trajectory=trajectory,
-        )
 
     unique_regions = list(seen.keys())
     best_idx = max(range(len(signed_scores)), key=lambda i: signed_scores[i])
