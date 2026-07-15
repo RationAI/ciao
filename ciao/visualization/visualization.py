@@ -91,7 +91,8 @@ def plot_regions(result: ExplanationResult) -> Figure:
         mask = _region_mask(segs, region_result.region)
         composite[mask] = repl[mask]
 
-    fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+    fig = Figure(figsize=(5, 5))
+    ax = fig.add_subplot(1, 1, 1)
     ax.imshow(composite)
     ax.axis("off")
     fig.tight_layout(pad=0)
@@ -120,7 +121,8 @@ def plot_region_scores(result: ExplanationResult) -> Figure:
         alpha = alphas[i % len(alphas)]
         composite[mask] = composite[mask] * (1 - alpha) + tint * alpha
 
-    fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+    fig = Figure(figsize=(5, 5))
+    ax = fig.add_subplot(1, 1, 1)
     ax.imshow(composite)
     ax.axis("off")
     fig.tight_layout(pad=0)
