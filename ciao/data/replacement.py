@@ -17,11 +17,12 @@ def make_mean_color_replacement(
         mean: Per-channel normalization mean used during preprocessing.
         std: Per-channel normalization std used during preprocessing.
     """
+    t_mean_cpu = torch.tensor(mean, dtype=torch.float32).view(3, 1, 1)
+    t_std_cpu = torch.tensor(std, dtype=torch.float32).view(3, 1, 1)
 
     def replacement(image: torch.Tensor) -> torch.Tensor:
-        device = image.device
-        t_mean = torch.tensor(mean, dtype=image.dtype, device=device).view(3, 1, 1)
-        t_std = torch.tensor(std, dtype=image.dtype, device=device).view(3, 1, 1)
+        t_mean = t_mean_cpu.to(device=image.device, dtype=image.dtype)
+        t_std = t_std_cpu.to(device=image.device, dtype=image.dtype)
         unnormalized = (image * t_std) + t_mean
         mean_color = unnormalized.mean(dim=(1, 2), keepdim=True)
         normalized_mean = (mean_color - t_mean) / t_std
@@ -142,16 +143,16 @@ def make_solid_color_replacement(
     if not all(0 <= c <= 255 for c in color):
         raise ValueError(f"RGB color values must be between 0 and 255, got {color}")
 
+    color_tensor = torch.tensor(color, dtype=torch.float32).view(3, 1, 1)
+    t_mean = torch.tensor(mean, dtype=torch.float32).view(3, 1, 1)
+    t_std = torch.tensor(std, dtype=torch.float32).view(3, 1, 1)
+    normalized_color_cpu = (color_tensor / 255.0 - t_mean) / t_std
+
     def replacement(image: torch.Tensor) -> torch.Tensor:
         _, height, width = image.shape
-        color_tensor = torch.tensor(color, dtype=image.dtype, device=image.device).view(
-            3, 1, 1
+        normalized_color = normalized_color_cpu.to(
+            device=image.device, dtype=image.dtype
         )
-        t_mean = torch.tensor(mean, dtype=image.dtype, device=image.device).view(
-            3, 1, 1
-        )
-        t_std = torch.tensor(std, dtype=image.dtype, device=image.device).view(3, 1, 1)
-        normalized_color = (color_tensor / 255.0 - t_mean) / t_std
         return normalized_color.expand(-1, height, width)
 
     return replacement
