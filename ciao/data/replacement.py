@@ -17,6 +17,12 @@ def make_mean_color_replacement(
         mean: Per-channel normalization mean used during preprocessing.
         std: Per-channel normalization std used during preprocessing.
     """
+    if len(mean) != 3 or len(std) != 3:
+        raise ValueError(
+            f"mean and std must each have 3 elements, got {len(mean)} and {len(std)}"
+        )
+    if any(s == 0 for s in std):
+        raise ValueError(f"std values must be non-zero, got {std}")
     t_mean_cpu = torch.tensor(mean, dtype=torch.float32).view(3, 1, 1)
     t_std_cpu = torch.tensor(std, dtype=torch.float32).view(3, 1, 1)
 
@@ -142,6 +148,12 @@ def make_solid_color_replacement(
         )
     if not all(0 <= c <= 255 for c in color):
         raise ValueError(f"RGB color values must be between 0 and 255, got {color}")
+    if len(mean) != 3 or len(std) != 3:
+        raise ValueError(
+            f"mean and std must each have 3 elements, got {len(mean)} and {len(std)}"
+        )
+    if any(s == 0 for s in std):
+        raise ValueError(f"std values must be non-zero, got {std}")
 
     color_tensor = torch.tensor(color, dtype=torch.float32).view(3, 1, 1)
     t_mean = torch.tensor(mean, dtype=torch.float32).view(3, 1, 1)
