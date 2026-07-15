@@ -109,12 +109,15 @@ def simulate_leaf(
     ctx: SearchContext,
     leaf: MCTSNode,
     num_rollouts: int,
+    eval_cache: dict[frozenset[int], float],
 ) -> tuple[list[float], list[frozenset[int]], int]:
     """Run ``num_rollouts`` simulations from ``leaf`` and return rewards.
 
     Terminal leaves are deterministic, so a single GPU evaluation (or cached
     value) is reused for all ``num_rollouts``. Non-terminal leaves sample
-    independent random rollouts and dedupe before GPU evaluation.
+    independent random rollouts and dedupe before GPU evaluation. Previously
+    computed regions are looked up in ``eval_cache`` to skip redundant GPU
+    calls.
 
     Returns rewards (already signed), the rollout regions per reward, and the
     number of GPU evaluations performed.
@@ -124,7 +127,10 @@ def simulate_leaf(
     )
 
     if leaf_is_terminal:
-        if leaf.visits > 0:
+        if leaf.region in eval_cache:
+            reward = eval_cache[leaf.region]
+            evals = 0
+        elif leaf.visits > 0:
             reward = leaf.mean_value  # already signed in prior backup
             evals = 0
         else:
@@ -139,6 +145,7 @@ def simulate_leaf(
                 batch_size=ctx.batch_size,
             )
             reward = raw[0] * ctx.optimization_sign
+            eval_cache[leaf.region] = reward
             evals = 1
         rewards = [reward] * num_rollouts
         regions = [leaf.region] * num_rollouts
@@ -153,22 +160,22 @@ def simulate_leaf(
         for _ in range(num_rollouts)
     ]
     unique_regions = list(dict.fromkeys(rollout_regions))
-    raw_rewards = calculate_region_deltas(
-        predictor=ctx.predictor,
-        input_batch=ctx.input_batch,
-        segments=ctx.image_graph.segments,
-        replacement_image=ctx.replacement_image,
-        segment_sets=unique_regions,
-        target_class_idx=ctx.target_class_idx,
-        original_log_odds=ctx.original_log_odds,
-        batch_size=ctx.batch_size,
-    )
-    region_to_reward = {
-        region: reward * ctx.optimization_sign
-        for region, reward in zip(unique_regions, raw_rewards, strict=True)
-    }
-    rewards = [region_to_reward[region] for region in rollout_regions]
-    return rewards, rollout_regions, len(unique_regions)
+    uncached = [r for r in unique_regions if r not in eval_cache]
+    if uncached:
+        raw_rewards = calculate_region_deltas(
+            predictor=ctx.predictor,
+            input_batch=ctx.input_batch,
+            segments=ctx.image_graph.segments,
+            replacement_image=ctx.replacement_image,
+            segment_sets=uncached,
+            target_class_idx=ctx.target_class_idx,
+            original_log_odds=ctx.original_log_odds,
+            batch_size=ctx.batch_size,
+        )
+        for region, score in zip(uncached, raw_rewards, strict=True):
+            eval_cache[region] = score * ctx.optimization_sign
+    rewards = [eval_cache[region] for region in rollout_regions]
+    return rewards, rollout_regions, len(uncached)
 
 
 def build_region_mcts(
@@ -204,6 +211,7 @@ def build_region_mcts(
     best_score = -float("inf")
 
     eval_count = 0
+    eval_cache: dict[frozenset[int], float] = {}
     trajectory: list[dict[str, float]] = []
     t0 = time.monotonic()
 
@@ -226,7 +234,9 @@ def build_region_mcts(
             path.append(node)
 
         # --- SIMULATION ---
-        rewards, rollout_regions, evals = simulate_leaf(ctx, node, num_rollouts)
+        rewards, rollout_regions, evals = simulate_leaf(
+            ctx, node, num_rollouts, eval_cache
+        )
         eval_count += evals
 
         for region, reward in zip(rollout_regions, rewards, strict=True):
@@ -237,7 +247,7 @@ def build_region_mcts(
         trajectory.append(
             {
                 "evals": eval_count,
-                "best_score": best_score,
+                "best_score": best_score * ctx.optimization_sign,
                 "time": time.monotonic() - t0,
             }
         )
