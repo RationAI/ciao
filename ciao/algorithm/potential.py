@@ -69,7 +69,7 @@ def build_region_potential(
             trajectory.append(
                 {
                     "evals": eval_count,
-                    "best_score": best_signed,
+                    "best_score": best_raw_score,
                     "time": time.monotonic() - t0,
                 }
             )
@@ -104,7 +104,7 @@ def build_region_potential(
         trajectory.append(
             {
                 "evals": eval_count,
-                "best_score": best_signed,
+                "best_score": best_raw_score,
                 "time": time.monotonic() - t0,
             }
         )

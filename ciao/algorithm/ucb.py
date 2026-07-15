@@ -69,7 +69,7 @@ class _SearchState:
         self.trajectory.append(
             {
                 "evals": self.eval_count,
-                "best_score": self.best_signed,
+                "best_score": self.best_raw_score,
                 "time": time.monotonic() - self.t0,
             }
         )
