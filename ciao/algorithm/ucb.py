@@ -27,6 +27,7 @@ class _ArmStats:
     """Per-neighbor running statistics for one commit step."""
 
     count: int = 0
+    active_count: int = 0
     sum_signed: float = 0.0
     max_signed: float = -float("inf")
     virtual_count: int = 0
@@ -132,7 +133,7 @@ def build_region_ucb(
         if not valid_arms:
             break
 
-        winner = max(valid_arms, key=lambda n: arms[n].count)
+        winner = max(valid_arms, key=lambda n: arms[n].active_count)
         curr_region = curr_region | {winner}
 
     if state.best_signed == -float("inf"):
@@ -165,7 +166,7 @@ def _ucb_score(
 
     Unvisited arms get +inf so the first ``len(frontier)`` rollouts seed every arm.
     """
-    if arm.count == 0:
+    if arm.active_count == 0:
         return float("inf")
     exploit = ucb_alpha * arm.max_signed + (1.0 - ucb_alpha) * arm.mean()
     explore = ucb_c * math.sqrt(
@@ -223,6 +224,7 @@ def _ucb_step(
             batch_regions.append(sampled)
             batch_owners.append(chosen)
             arm.virtual_count += 1
+            arm.active_count += 1
             rollouts_done += 1
 
         # --- Evaluate uncached regions ---

@@ -79,7 +79,7 @@ def build_region_potential(
         if not valid_nodes:
             break
 
-        winner = max(valid_nodes, key=lambda n: sorted(potentials[n], reverse=True))
+        winner = max(valid_nodes, key=lambda n: max(potentials[n]))
 
         # Commit: Add winner to region structure
         curr_region = curr_region | {winner}
