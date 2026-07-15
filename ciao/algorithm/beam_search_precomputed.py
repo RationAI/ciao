@@ -27,7 +27,7 @@ def build_region_beam_search(
         raise ValueError(f"beam_width must be >= 1, got {beam_width}")
 
     target_length = ctx.desired_length
-    used_segments = set(ctx.used_segments)
+    used_segments = ctx.used_segments
 
     t0 = time.monotonic()
     seed_region = frozenset({ctx.seed_idx})
@@ -42,9 +42,6 @@ def build_region_beam_search(
         for region, signed_sum in beam:
             frontier = ctx.image_graph.get_frontier(region, used_segments)
             for seg_id in sorted(frontier):
-                if seg_id not in ctx.segment_scores:
-                    raise ValueError(f"segment {seg_id} is missing from segment_scores")
-
                 new_region = region | {seg_id}
                 new_signed_sum = (
                     signed_sum + ctx.optimization_sign * ctx.segment_scores[seg_id]
@@ -61,12 +58,7 @@ def build_region_beam_search(
             :beam_width
         ]
 
-    full_length_candidates = [item for item in beam if len(item[0]) == target_length]
-    if full_length_candidates:
-        best_region = max(full_length_candidates, key=lambda item: item[1])[0]
-    else:
-        # Fallback when no region can reach target_length due graph constraints.
-        best_region = max(beam, key=lambda item: (len(item[0]), item[1]))[0]
+    best_region = max(beam, key=lambda item: item[1])[0]
 
     final_score = calculate_region_deltas(
         predictor=ctx.predictor,
