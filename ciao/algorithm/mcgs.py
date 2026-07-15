@@ -158,8 +158,12 @@ def backup_path(
     leaf._own_visits += k
     leaf._own_value_sum += sum_rewards
     leaf.visits += k
-    if max_reward > leaf.max_value:
-        leaf.max_value = max_reward
+    # Include grafted children's max so UCT reads accurate Q during backup
+    leaf.max_value = max(
+        leaf.max_value,
+        max_reward,
+        *(c.max_value for c in leaf.children.values()),
+    )
     leaf.mean_value = _recursive_q(leaf)
 
     # Intermediate nodes: increment edge visits, then recompute Q bottom-up
@@ -168,8 +172,13 @@ def backup_path(
         node.edge_stats[actions[i]].visits += k
 
         node.visits += k
-        if max_reward > node.max_value:
-            node.max_value = max_reward
+        # In the DAG a child's max_value may have been updated via another path,
+        # so recompute from all current children rather than just max_reward.
+        node.max_value = max(
+            node.max_value,
+            max_reward,
+            *(c.max_value for c in node.children.values()),
+        )
         node.mean_value = _recursive_q(node)
 
 
@@ -319,7 +328,7 @@ def build_region_mcgs(
         trajectory.append(
             {
                 "evals": eval_count,
-                "best_score": best_score,
+                "best_score": best_score * ctx.optimization_sign,
                 "time": time.monotonic() - t0,
             }
         )
