@@ -8,4 +8,4 @@ on:
 
 jobs:
   run:
-    uses: ./.github/workflows/_python-lint-impl.yml
+    uses: RationAI/.github/.github/workflows/python-lint.yml@main
