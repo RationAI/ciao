@@ -1,7 +1,7 @@
 """Graph utilities for segment manipulation using set operations."""
 
 import random
-from collections.abc import Set
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 
 import torch
@@ -24,8 +24,8 @@ class ImageGraph:
 
     def get_frontier(
         self,
-        current_region: Set[int],
-        used_segments: Set[int],
+        current_region: AbstractSet[int],
+        used_segments: AbstractSet[int],
     ) -> set[int]:
         """Compute the expansion frontier (valid neighbors) for graph traversal.
 
@@ -53,9 +53,9 @@ class ImageGraph:
 
     def sample_connected_superset(
         self,
-        base_region: Set[int],
+        base_region: AbstractSet[int],
         target_length: int,
-        used_segments: Set[int],
+        used_segments: AbstractSet[int],
     ) -> frozenset[int]:
         """Simulates a random walk to build a full region.
 

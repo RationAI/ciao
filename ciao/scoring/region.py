@@ -1,4 +1,5 @@
-from collections.abc import Sequence, Set
+from collections.abc import Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 
 import torch
@@ -43,7 +44,7 @@ def _prepare_tensors_for_model(
 
 def _build_mask_tensor(
     gpu_segments: torch.Tensor,
-    segment_ids_slice: Sequence[Set[int]],
+    segment_ids_slice: Sequence[AbstractSet[int]],
     device: torch.device,
 ) -> torch.Tensor:
     """Build a boolean mask tensor [batch, H, W] from segment ID sets."""
@@ -100,7 +101,7 @@ def calculate_region_deltas(
     predictor: ModelPredictor,
     input_batch: torch.Tensor,
     segments: torch.Tensor,
-    segment_sets: Sequence[Set[int]],
+    segment_sets: Sequence[AbstractSet[int]],
     replacement_image: torch.Tensor,
     target_class_idx: int,
     original_log_odds: torch.Tensor,

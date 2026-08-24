@@ -2,8 +2,8 @@ from pathlib import Path
 from typing import cast
 
 import torch
-import torchvision.transforms as transforms
 from PIL import Image
+from torchvision import transforms
 
 from ciao.data.constants import IMAGENET_MEAN, IMAGENET_STD
 

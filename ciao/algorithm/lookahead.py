@@ -5,7 +5,7 @@ Rolling horizon strategy: Look ahead multiple steps but only commit one step at 
 
 import time
 from collections import deque
-from collections.abc import Set
+from collections.abc import Set as AbstractSet
 
 from ciao.algorithm.context import SearchContext
 from ciao.algorithm.graph import ImageGraph
@@ -144,7 +144,7 @@ def build_region_greedy_lookahead(
 def _generate_lookahead_candidates(
     current_region: frozenset[int],
     image_graph: ImageGraph,
-    used_segments: Set[int],
+    used_segments: AbstractSet[int],
     lookahead_distance: int,
     desired_length: int,
 ) -> dict[frozenset[int], int]:
