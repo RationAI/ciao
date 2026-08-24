@@ -4,15 +4,15 @@ This module contains common functions used by both Monte Carlo Tree Search (MCTS
 and Monte Carlo Graph Search (MCGS) implementations.
 """
 
-from collections.abc import Set
+from collections.abc import Set as AbstractSet
 
 from ciao.algorithm.graph import ImageGraph
 
 
 def is_terminal(
-    current_region: Set[int],
+    current_region: AbstractSet[int],
     image_graph: ImageGraph,
-    used_segments: Set[int],
+    used_segments: AbstractSet[int],
     max_depth: int,
 ) -> bool:
     """Check if state is terminal (max depth or no frontier)."""
