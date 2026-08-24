@@ -9,8 +9,8 @@ from ciao.data.replacement import (
     imagenet_mean_replacement,
     interlacing_replacement,
     make_blur_replacement,
-    make_mean_color_replacement,
     make_solid_color_replacement,
+    mean_color_replacement,
 )
 from ciao.data.segmentation import (
     make_hexagonal_segmentation,
@@ -27,8 +27,8 @@ __all__ = [
     "load_and_preprocess_image_pcam",
     "make_blur_replacement",
     "make_hexagonal_segmentation",
-    "make_mean_color_replacement",
     "make_slic_segmentation",
     "make_solid_color_replacement",
     "make_square_segmentation",
+    "mean_color_replacement",
 ]

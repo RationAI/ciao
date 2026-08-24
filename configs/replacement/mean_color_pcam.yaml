@@ -1,3 +1,0 @@
-_target_: ciao.data.replacement.make_mean_color_replacement
-mean: [0.0, 0.0, 0.0]
-std: [1.0, 1.0, 1.0]

@@ -1,3 +1,2 @@
-_target_: ciao.data.replacement.make_mean_color_replacement
-mean: [0.485, 0.456, 0.406]
-std: [0.229, 0.224, 0.225]
+_target_: ciao.data.replacement.mean_color_replacement
+_partial_: true

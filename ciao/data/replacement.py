@@ -7,35 +7,22 @@ from ciao.data.constants import IMAGENET_MEAN, IMAGENET_STD
 from ciao.typing import ReplacementFn
 
 
-def make_mean_color_replacement(
-    mean: tuple[float, float, float] = IMAGENET_MEAN,
-    std: tuple[float, float, float] = IMAGENET_STD,
-) -> ReplacementFn:
-    """Return a replacement function that fills the image with its per-image mean color.
+def mean_color_replacement(image: torch.Tensor) -> torch.Tensor:
+    """Replace the image with its own per-image mean color.
+
+    Un-normalizing, averaging, and re-normalizing is a no-op since normalization
+    is a per-channel affine transform: the mean of the normalized image already
+    equals the normalized mean color, independent of the mean/std used.
 
     Args:
-        mean: Per-channel normalization mean used during preprocessing.
-        std: Per-channel normalization std used during preprocessing.
+        image: Original input tensor of shape (3, H, W).
+
+    Returns:
+        Tensor filled with the per-image mean color.
     """
-    if len(mean) != 3 or len(std) != 3:
-        raise ValueError(
-            f"mean and std must each have 3 elements, got {len(mean)} and {len(std)}"
-        )
-    if any(s == 0 for s in std):
-        raise ValueError(f"std values must be non-zero, got {std}")
-    t_mean_cpu = torch.tensor(mean, dtype=torch.float32).view(3, 1, 1)
-    t_std_cpu = torch.tensor(std, dtype=torch.float32).view(3, 1, 1)
-
-    def replacement(image: torch.Tensor) -> torch.Tensor:
-        t_mean = t_mean_cpu.to(device=image.device, dtype=image.dtype)
-        t_std = t_std_cpu.to(device=image.device, dtype=image.dtype)
-        unnormalized = (image * t_std) + t_mean
-        mean_color = unnormalized.mean(dim=(1, 2), keepdim=True)
-        normalized_mean = (mean_color - t_mean) / t_std
-        _, height, width = image.shape
-        return normalized_mean.expand(-1, height, width)
-
-    return replacement
+    if image.ndim != 3:
+        raise ValueError(f"expected a (C, H, W) tensor, got shape {tuple(image.shape)}")
+    return image.mean(dim=(1, 2), keepdim=True).expand_as(image)
 
 
 def imagenet_mean_replacement(image: torch.Tensor) -> torch.Tensor:

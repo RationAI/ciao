@@ -1,5 +1,5 @@
 import timm
-import torch.nn as nn
+from torch import nn
 
 
 def load_pcam_model() -> nn.Module:
