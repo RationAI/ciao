@@ -1,0 +1,2 @@
+_target_: ciao.explainer.explanation_methods.make_beam_search_method
+beam_width: 64
