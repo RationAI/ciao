@@ -18,8 +18,6 @@ import math
 import random
 import time
 
-from tqdm import tqdm
-
 from ciao.algorithm.context import SearchContext
 from ciao.algorithm.graph import ImageGraph
 from ciao.algorithm.nodes import MCTSNode
@@ -214,7 +212,7 @@ def build_region_mcts(
     trajectory: list[dict[str, float]] = []
     t0 = time.monotonic()
 
-    for _ in tqdm(range(num_iterations), desc="MCTS", unit="iter"):
+    for _ in range(num_iterations):
         # --- SELECTION + EXPANSION ---
         node = root
         path = [node]
