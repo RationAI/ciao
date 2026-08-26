@@ -165,14 +165,22 @@ def _ucb_score(
 ) -> float:
     """Blended-mean UCB1 score for a single arm.
 
-    Unvisited arms get +inf so the first ``len(frontier)`` rollouts seed every arm.
+    Arms with no pulls yet (real or virtual) get +inf so the first
+    ``len(frontier)`` rollouts seed every arm. An arm already chosen within
+    the current batch but not yet evaluated (``virtual_count > 0`` but
+    ``count == 0``) uses a neutral exploitation term instead of its stale
+    default ``max_signed``/``mean``, so the virtual-count explore term -
+    not a permanent -inf - drives further picks within the batch.
     """
-    if arm.active_count == 0:
+    denom = arm.count + arm.virtual_count
+    if denom == 0:
         return float("inf")
-    exploit = ucb_alpha * arm.max_signed + (1.0 - ucb_alpha) * arm.mean()
-    explore = ucb_c * math.sqrt(
-        math.log(max(total_pulls, 1)) / (arm.count + arm.virtual_count)
+    exploit = (
+        ucb_alpha * arm.max_signed + (1.0 - ucb_alpha) * arm.mean()
+        if arm.count > 0
+        else 0.0
     )
+    explore = ucb_c * math.sqrt(math.log(max(total_pulls, 1)) / denom)
     return exploit + explore
 
 
