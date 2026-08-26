@@ -77,7 +77,7 @@ def select_uct_child(
 def expand_node_eager(
     node: MCGSNode,
     image_graph: ImageGraph,
-    used_region: frozenset[int],
+    used_segments: frozenset[int],
     transposition_table: dict[frozenset[int], MCGSNode],
 ) -> tuple[int, MCGSNode] | None:
     """Eager expansion with grafting.
@@ -90,7 +90,7 @@ def expand_node_eager(
     One random fresh candidate is then created and returned. Returns ``None``
     if every frontier segment was already a child or could be grafted.
     """
-    frontier = image_graph.get_frontier(node.region, used_region)
+    frontier = image_graph.get_frontier(node.region, used_segments)
 
     new_candidates: list[tuple[int, frozenset[int]]] = []
 
@@ -122,8 +122,9 @@ def _recursive_q(node: MCGSNode) -> float:
     """Compute node Q as a weighted combination of own rewards and child Qs.
 
     ``Q(n) = (own_value_sum + sum_a edge.visits[a] * Q(child_a)) / total_visits``
-    where ``total_visits = _own_visits + sum(edge.visits)``.
-    Prior-seeded edge visits from grafting are included in the denominator.
+    where ``total_visits = _own_visits + sum(edge.visits)``. Grafted edges start
+    with zero visits, so a grafted child only contributes once it is actually
+    traversed again from this node.
     """
     total = node._own_visits + sum(e.visits for e in node.edge_stats.values())
     if total == 0:
