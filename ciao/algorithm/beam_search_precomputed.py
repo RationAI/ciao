@@ -23,8 +23,12 @@ def build_region_beam_search(
     Returns:
         RegionResult containing the selected region and one final NN-evaluated score.
     """
-    if beam_width < 1:
-        raise ValueError(f"beam_width must be >= 1, got {beam_width}")
+    if (
+        not isinstance(beam_width, int)
+        or isinstance(beam_width, bool)
+        or beam_width < 1
+    ):
+        raise ValueError(f"beam_width must be an int >= 1, got {beam_width!r}")
 
     target_length = ctx.desired_length
     used_segments = ctx.used_segments
@@ -58,7 +62,10 @@ def build_region_beam_search(
             :beam_width
         ]
 
-    best_region = max(beam, key=lambda item: item[1])[0]
+    # beam is kept sorted descending by score and every region has the same
+    # length (each expansion step extends all regions by exactly one segment),
+    # so the highest-scoring region is always first.
+    best_region = beam[0][0]
 
     final_score = calculate_region_deltas(
         predictor=ctx.predictor,

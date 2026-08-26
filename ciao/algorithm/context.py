@@ -38,10 +38,15 @@ class SearchContext:
             raise ValueError(
                 f"seed_idx {self.seed_idx} is out of bounds (0 to {self.image_graph.num_segments - 1})"
             )
-        missing = set(range(self.image_graph.num_segments)) - self.segment_scores.keys()
-        if missing:
+        if len(self.segment_scores) < self.image_graph.num_segments:
+            missing = sorted(
+                set(range(self.image_graph.num_segments)) - self.segment_scores.keys()
+            )
+            ids = ", ".join(str(i) for i in missing[:20])
+            if len(missing) > 20:
+                ids += ", ..."
             raise ValueError(
-                f"segment_scores is missing {len(missing)} segments: {sorted(missing)}"
+                f"segment_scores is missing {len(missing)} segments: [{ids}]"
             )
         if self.seed_idx in self.used_segments:
             raise ValueError(f"seed_idx {self.seed_idx} is already in used_segments")

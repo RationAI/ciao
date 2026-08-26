@@ -41,8 +41,12 @@ def make_beam_search_method(beam_width: int = 64) -> ExplanationMethodFn:
     Returns:
         ExplanationMethodFn: Method computing contextual importance via beam search.
     """
-    if beam_width < 1:
-        raise ValueError(f"beam_width must be >= 1, got {beam_width}")
+    if (
+        not isinstance(beam_width, int)
+        or isinstance(beam_width, bool)
+        or beam_width < 1
+    ):
+        raise ValueError(f"beam_width must be an int >= 1, got {beam_width!r}")
 
     def method(ctx: SearchContext) -> RegionResult:
         """Find the region via score-only beam search."""
