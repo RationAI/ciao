@@ -33,7 +33,8 @@ def make_potential_method(step_budget: int = 10) -> ExplanationMethodFn:
     """Return a function that generates a potential-based region building strategy.
 
     Args:
-        step_budget: Total number of rollouts per commit step (same semantics as UCB).
+        step_budget: Total number of rollouts per commit step, distributed
+            round-robin across frontier nodes.
 
     Returns:
         ExplanationMethodFn: Method computing contextual importance via potential search.

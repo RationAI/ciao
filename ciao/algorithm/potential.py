@@ -1,6 +1,6 @@
 """Potential algorithm — Sequential Monte Carlo with Potential-based Selection.
 
-Uses set for regions.
+Uses frozenset for regions.
 """
 
 import time
@@ -19,7 +19,8 @@ def build_region_potential(
 
     Args:
         ctx: Search context
-        step_budget: Maximum number of rollouts per commit step (same semantics as UCB)
+        step_budget: Maximum number of rollouts per commit step, distributed
+            round-robin across frontier nodes (see ``sampling_phase``)
 
     Returns:
         RegionResult with region, score, and statistics. The returned region is
@@ -138,7 +139,9 @@ def sampling_phase(
     Args:
         curr_region: Current region structure (set-like)
         current_frontier: Frontier nodes (set for hit detection and iteration)
-        step_budget: Total number of rollouts for this commit step (same as UCB)
+        step_budget: Total number of rollouts for this commit step, distributed
+            round-robin across frontier nodes. Not guaranteed to reach every
+            frontier node when step_budget < len(current_frontier)
         ctx: Search context containing target length, model state, and evaluation parameters
         used_segments: Set-like wrapper of already-used nodes
         evaluated_scores: Global cache of previously evaluated regions to their scores
