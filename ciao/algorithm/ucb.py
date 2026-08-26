@@ -9,7 +9,9 @@ score blends mean and max reward to retain the optimization-extremum signal:
           + c * sqrt(ln(N) / (count + virtual_count))
 
 After the step's rollout budget is exhausted we commit the neighbor with the
-highest real ``count`` (the one UCB explored the most), then repeat.
+highest ``active_count`` (the one UCB actively chose the most, as opposed to
+arms only touched passively while rolling out a different chosen arm), then
+repeat.
 """
 
 import math
