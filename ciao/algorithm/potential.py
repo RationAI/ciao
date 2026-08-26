@@ -4,7 +4,7 @@ Uses set for regions.
 """
 
 import time
-from collections.abc import Set
+from collections.abc import Set as AbstractSet
 
 from ciao.algorithm.context import SearchContext
 from ciao.algorithm.search_helpers import evaluate_and_cache
@@ -118,11 +118,11 @@ def build_region_potential(
 
 
 def sampling_phase(
-    curr_region: Set[int],
-    current_frontier: Set[int],
+    curr_region: AbstractSet[int],
+    current_frontier: AbstractSet[int],
     step_budget: int,
     ctx: SearchContext,
-    used_segments: Set[int],
+    used_segments: AbstractSet[int],
     evaluated_scores: dict[frozenset[int], float],
 ) -> tuple[
     dict[int, list[float]],

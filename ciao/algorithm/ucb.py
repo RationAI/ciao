@@ -14,7 +14,7 @@ highest real ``count`` (the one UCB explored the most), then repeat.
 
 import math
 import time
-from collections.abc import Set
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 
 from ciao.algorithm.context import SearchContext
@@ -39,8 +39,7 @@ class _ArmStats:
     def update(self, signed_score: float) -> None:
         self.count += 1
         self.sum_signed += signed_score
-        if signed_score > self.max_signed:
-            self.max_signed = signed_score
+        self.max_signed = max(self.max_signed, signed_score)
 
 
 @dataclass
@@ -176,14 +175,14 @@ def _ucb_score(
 
 
 def _ucb_step(
-    curr_region: Set[int],
-    current_frontier: Set[int],
+    curr_region: AbstractSet[int],
+    current_frontier: AbstractSet[int],
     step_budget: int,
     batch_size: int,
     ucb_c: float,
     ucb_alpha: float,
     ctx: SearchContext,
-    used_segments: Set[int],
+    used_segments: AbstractSet[int],
     evaluated_scores: dict[frozenset[int], float],
     state: _SearchState,
 ) -> dict[int, _ArmStats]:
