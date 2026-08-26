@@ -101,8 +101,7 @@ def backup_path(path: list[MCTSNode], rewards: list[float]) -> None:
         new_visits = node.visits + k
         node.mean_value = (node.mean_value * node.visits + sum_rewards) / new_visits
         node.visits = new_visits
-        if max_reward > node.max_value:
-            node.max_value = max_reward
+        node.max_value = max(node.max_value, max_reward)
 
 
 def simulate_leaf(
