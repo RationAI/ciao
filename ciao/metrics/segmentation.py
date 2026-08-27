@@ -1,9 +1,17 @@
 """Segmentation-based evaluation metrics for CIAO explanations."""
 
 import torch
+from torchvision.transforms import InterpolationMode
+from torchvision.transforms import functional as TF
 
 from ciao.data.imagenet_s import ImageNetSMapping, get_object_mask
 from ciao.explainer.ciao_explainer import ExplanationResult
+
+
+# Must match the Resize(256) step in ciao.data.preprocessing's preprocessing
+# pipeline: the model sees a center-cropped view of a 256-resize, not a plain
+# downscale, so the GT mask needs the same resize-then-crop to stay aligned.
+_PREPROCESS_RESIZE_SIZE = 256
 
 
 def compute_iou(
@@ -14,8 +22,12 @@ def compute_iou(
     """Compute IoU between the explanation's union region mask and the GT segmentation.
 
     The prediction mask is the union of all RegionResult regions, binarized over
-    the explanation's segment map. The GT mask is resized to the explanation
-    resolution (224x224) with nearest-neighbor interpolation.
+    the explanation's segment map. The GT mask is aligned to the explanation
+    resolution by replicating the exact Resize(256) + CenterCrop(224) transform
+    applied to the model input (see ciao.data.preprocessing) - not by
+    independently squashing it to (224, 224), which would misalign non-square
+    images and pull in border content the model's crop actually discarded.
+    Nearest-neighbor interpolation preserves discrete class labels.
 
     Args:
         result: ExplanationResult from CIAOExplainer.explain().
@@ -43,16 +55,11 @@ def compute_iou(
         return None
 
     H, W = result.segments.shape
-    gt_resized = (
-        torch.nn.functional.interpolate(
-            object_mask.float().unsqueeze(0).unsqueeze(0),
-            size=(H, W),
-            mode="nearest",
-        )
-        .squeeze(0)
-        .squeeze(0)
-        .bool()
+    mask_chw = object_mask.to(torch.uint8).unsqueeze(0)  # [1, H', W']
+    resized = TF.resize(
+        mask_chw, size=_PREPROCESS_RESIZE_SIZE, interpolation=InterpolationMode.NEAREST
     )
+    gt_resized = TF.center_crop(resized, [H, W]).squeeze(0).bool()
 
     intersection = int((pred_mask & gt_resized).sum())
     union = int((pred_mask | gt_resized).sum())
