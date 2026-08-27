@@ -63,7 +63,7 @@ def _load_segments_npy(client: mlflow.MlflowClient, run_id: str) -> np.ndarray |
             return None
         buf = client.download_artifacts(run_id, "segments.npy")
         return np.load(buf)
-    except Exception:
+    except (mlflow.exceptions.MlflowException, OSError, ValueError):
         return None
 
 
@@ -95,7 +95,7 @@ def _load_region_segments(
             regions.append(data["segments"])
             idx += 1
         return regions if regions else None
-    except Exception:
+    except (mlflow.exceptions.MlflowException, OSError, ValueError, KeyError):
         return None
 
 

@@ -71,7 +71,7 @@ def compute_deletion_curve(
     repl_flat = replacement_image.view(3, n_pixels).to(device)  # [C, H*W]
 
     for frac in fractions:
-        n_masked = int(round(frac * n_pixels))
+        n_masked = round(frac * n_pixels)
         mask = torch.zeros(n_pixels, dtype=torch.bool, device=device)
         if n_masked > 0:
             indices = torch.tensor(
@@ -198,7 +198,7 @@ def compute_insertion_curve(
     repl_flat = replacement_image.view(3, n_pixels).to(device)  # [C, H*W]
 
     for frac in fractions:
-        n_revealed = int(round(frac * n_pixels))
+        n_revealed = round(frac * n_pixels)
         revealed = torch.zeros(n_pixels, dtype=torch.bool, device=device)
         if n_revealed > 0:
             indices = torch.tensor(
