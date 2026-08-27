@@ -1,0 +1,4 @@
+name: imagenet_s_batch
+batch_path: ???
+masks_path: ???
+limit: null
