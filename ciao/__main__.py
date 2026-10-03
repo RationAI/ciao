@@ -1,6 +1,7 @@
 import random
 import tempfile
 import time
+from collections.abc import Callable
 from contextlib import nullcontext
 from pathlib import Path
 
@@ -57,6 +58,7 @@ def _build_pipeline(
     ReplacementFn,
     ModelPredictor,
     CIAOExplainer,
+    Callable[..., torch.Tensor] | None,
 ]:
     """Instantiate explanation components from the Hydra config."""
     segmentation = instantiate(cfg.segmentation)
@@ -70,8 +72,10 @@ def _build_pipeline(
     class_names = instantiate(cfg.classes)
     predictor = ModelPredictor(model=model, class_names=class_names)
 
+    preprocess_fn = instantiate(cfg.preprocessing) if "preprocessing" in cfg else None
+
     explainer = CIAOExplainer()
-    return segmentation, method, replacement, predictor, explainer
+    return segmentation, method, replacement, predictor, explainer, preprocess_fn
 
 
 def _log_trajectory(run_id: str, results: ExplanationResult) -> None:
@@ -215,7 +219,9 @@ def main(cfg: DictConfig) -> None:
         params.pop("target_class_idx", None)
         mlflow.log_params(params)
 
-        segmentation, method, replacement, predictor, explainer = _build_pipeline(cfg)
+        segmentation, method, replacement, predictor, explainer, preprocess_fn = (
+            _build_pipeline(cfg)
+        )
 
         batch_mode = cfg.data.get("batch_path") is not None
 
@@ -246,6 +252,7 @@ def main(cfg: DictConfig) -> None:
                     segmentation=segmentation,
                     method=method,
                     replacement=replacement,
+                    preprocess_fn=preprocess_fn,
                 )
 
                 elapsed = time.perf_counter() - start_time
