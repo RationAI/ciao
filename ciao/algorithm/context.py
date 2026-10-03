@@ -16,6 +16,7 @@ class SearchContext:
     image_graph: ImageGraph
     target_class_idx: int
     original_log_odds: torch.Tensor
+    segment_scores: dict[int, float]
     seed_idx: int
     optimization_sign: int
     used_segments: frozenset[int]
@@ -31,9 +32,21 @@ class SearchContext:
             raise ValueError(
                 f"optimization_sign must be 1 or -1, got {self.optimization_sign}"
             )
+        if not self.segment_scores:
+            raise ValueError("segment_scores cannot be empty")
         if not (0 <= self.seed_idx < self.image_graph.num_segments):
             raise ValueError(
                 f"seed_idx {self.seed_idx} is out of bounds (0 to {self.image_graph.num_segments - 1})"
+            )
+        if len(self.segment_scores) < self.image_graph.num_segments:
+            missing = sorted(
+                set(range(self.image_graph.num_segments)) - self.segment_scores.keys()
+            )
+            ids = ", ".join(str(i) for i in missing[:20])
+            if len(missing) > 20:
+                ids += ", ..."
+            raise ValueError(
+                f"segment_scores is missing {len(missing)} segments: [{ids}]"
             )
         if self.seed_idx in self.used_segments:
             raise ValueError(f"seed_idx {self.seed_idx} is already in used_segments")
