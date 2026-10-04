@@ -1,0 +1,88 @@
+"""Beam search for connected image regions using precomputed segment scores.
+
+The search objective uses the initial segment scores only. No neural-network queries
+are made during expansion; the selected final region is evaluated once at the end.
+"""
+
+import time
+
+from ciao.algorithm.context import SearchContext
+from ciao.scoring.region import RegionResult, calculate_region_deltas
+
+
+def build_region_beam_search(
+    ctx: SearchContext,
+    beam_width: int,
+) -> RegionResult:
+    """Build a region with beam search over connected segment expansions.
+
+    Args:
+        ctx: Search context with graph state and precomputed segment scores.
+        beam_width: Number of best partial regions kept per depth.
+
+    Returns:
+        RegionResult containing the selected region and one final NN-evaluated score.
+    """
+    if (
+        not isinstance(beam_width, int)
+        or isinstance(beam_width, bool)
+        or beam_width < 1
+    ):
+        raise ValueError(f"beam_width must be an int >= 1, got {beam_width!r}")
+
+    target_length = ctx.desired_length
+    used_segments = ctx.used_segments
+
+    t0 = time.monotonic()
+    seed_region = frozenset({ctx.seed_idx})
+    seed_signed_sum = ctx.optimization_sign * ctx.segment_scores[ctx.seed_idx]
+
+    # Beam stores tuples of (region, signed_sum_of_initial_segment_scores)
+    beam: list[tuple[frozenset[int], float]] = [(seed_region, seed_signed_sum)]
+
+    while beam and len(beam[0][0]) < target_length:
+        next_level: dict[frozenset[int], float] = {}
+
+        for region, signed_sum in beam:
+            frontier = ctx.image_graph.get_frontier(region, used_segments)
+            for seg_id in sorted(frontier):
+                new_region = region | {seg_id}
+                new_signed_sum = (
+                    signed_sum + ctx.optimization_sign * ctx.segment_scores[seg_id]
+                )
+
+                prev_best = next_level.get(new_region)
+                if prev_best is None or new_signed_sum > prev_best:
+                    next_level[new_region] = new_signed_sum
+
+        if not next_level:
+            break
+
+        beam = sorted(next_level.items(), key=lambda item: item[1], reverse=True)[
+            :beam_width
+        ]
+
+    # beam is kept sorted descending by score and every region has the same
+    # length (each expansion step extends all regions by exactly one segment),
+    # so the highest-scoring region is always first.
+    best_region = beam[0][0]
+
+    final_score = calculate_region_deltas(
+        predictor=ctx.predictor,
+        input_batch=ctx.input_batch,
+        segments=ctx.image_graph.segments,
+        replacement_image=ctx.replacement_image,
+        segment_sets=[best_region],
+        target_class_idx=ctx.target_class_idx,
+        original_log_odds=ctx.original_log_odds,
+        batch_size=1,
+    )[0]
+
+    return RegionResult(
+        region=best_region,
+        score=final_score,
+        evaluations_count=1,
+        trajectory=[
+            {"evals": 1, "best_score": final_score, "time": time.monotonic() - t0}
+        ],
+    )

@@ -1,5 +1,6 @@
 """CIAO explainer implementation."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,6 +57,7 @@ class CIAOExplainer:
         sigma: SeedSelectionMode = None,
         desired_length: int = 30,
         batch_size: int = 64,
+        preprocess_fn: Callable[..., torch.Tensor] | None = None,
     ) -> ExplanationResult:
         """Generate CIAO explanation for an image.
 
@@ -72,6 +74,9 @@ class CIAOExplainer:
                 ``-1`` targets negative evidence.
             desired_length: Target number of segments per region (default=30)
             batch_size: Batch size for model evaluation
+            preprocess_fn: Image loading and preprocessing callable with signature
+                ``(image_path, device) -> Tensor[C, H, W]``. Defaults to ImageNet
+                preprocessing (224x224, ImageNet normalization) when None.
 
         Returns:
             ExplanationResult: ExplanationResult dataclass containing explanation artifacts and stats.
@@ -102,7 +107,10 @@ class CIAOExplainer:
             )
 
         # 2. Setup of the image
-        input_tensor = load_and_preprocess_image(image_path, device=predictor.device)
+        _preprocess = (
+            preprocess_fn if preprocess_fn is not None else load_and_preprocess_image
+        )
+        input_tensor = _preprocess(image_path, device=predictor.device)
         input_batch = input_tensor.unsqueeze(0)  # Add batch dimension
 
         if input_batch.dim() != 4 or input_batch.shape[0] != 1:
