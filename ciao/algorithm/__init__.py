@@ -5,6 +5,7 @@ from ciao.algorithm.builder import build_all_regions
 from ciao.algorithm.context import SearchContext
 from ciao.algorithm.graph import ImageGraph
 from ciao.algorithm.lookahead import build_region_greedy_lookahead
+from ciao.algorithm.pure_monte_carlo import build_region_pure_monte_carlo
 from ciao.algorithm.search_helpers import is_terminal
 
 
@@ -14,5 +15,6 @@ __all__ = [
     "build_all_regions",
     "build_region_beam_search",
     "build_region_greedy_lookahead",
+    "build_region_pure_monte_carlo",
     "is_terminal",
 ]
