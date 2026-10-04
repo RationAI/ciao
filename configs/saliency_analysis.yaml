@@ -1,0 +1,36 @@
+defaults:
+  - model: resnet50
+  - classes: imagenet
+  - replacement: mean_color
+  - preprocessing: imagenet
+  - _self_
+
+tracking_uri: https://mlflow.rationai.cloud.e-infra.cz/
+experiment_name: algorithm-comparison-imagenet-s
+
+# Path to the original images (same as data.batch_path used in the explanation job)
+images_path: ???
+
+# Path to ImageNet-S ground truth masks (same as data.masks_path used in the explanation job)
+# Set to null to skip pointing game
+masks_path: null
+
+# Saliency map construction
+sigma_fraction: 0.09
+
+# Deletion metric — set to true only when GPU/model is available
+compute_deletion: false
+deletion_steps: 64
+
+# Insertion metric — set to true only when GPU/model is available
+compute_insertion: false
+insertion_steps: 64
+
+# IoU: fraction of top-saliency pixels to threshold against GT mask; null to skip
+iou_top_fraction: null
+
+# Log saliency map and curve figures back to MLflow
+log_figures: true
+
+# Optional: only process algo keys that start with this prefix (e.g. "lookahead")
+algo_filter: null

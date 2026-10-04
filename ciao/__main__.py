@@ -1,5 +1,7 @@
 import random
+import tempfile
 import time
+from collections.abc import Callable
 from contextlib import nullcontext
 from pathlib import Path
 
@@ -12,8 +14,10 @@ from hydra.utils import instantiate
 from mlflow.entities import Metric
 from omegaconf import DictConfig, OmegaConf
 
+from ciao.data.imagenet_s import ImageNetSMapping, build_imagenet_s_mapping, load_mask
 from ciao.data.loader import iter_image_paths
 from ciao.explainer.ciao_explainer import CIAOExplainer, ExplanationResult
+from ciao.metrics import compute_iou
 from ciao.model.predictor import ModelPredictor
 from ciao.typing import ExplanationMethodFn, ReplacementFn, SegmentationFn
 from ciao.visualization import plot_overview, plot_region_scores, plot_regions
@@ -54,6 +58,7 @@ def _build_pipeline(
     ReplacementFn,
     ModelPredictor,
     CIAOExplainer,
+    Callable[..., torch.Tensor] | None,
 ]:
     """Instantiate explanation components from the Hydra config."""
     segmentation = instantiate(cfg.segmentation)
@@ -67,8 +72,10 @@ def _build_pipeline(
     class_names = instantiate(cfg.classes)
     predictor = ModelPredictor(model=model, class_names=class_names)
 
+    preprocess_fn = instantiate(cfg.preprocessing) if "preprocessing" in cfg else None
+
     explainer = CIAOExplainer()
-    return segmentation, method, replacement, predictor, explainer
+    return segmentation, method, replacement, predictor, explainer, preprocess_fn
 
 
 def _log_trajectory(run_id: str, results: ExplanationResult) -> None:
@@ -212,9 +219,16 @@ def main(cfg: DictConfig) -> None:
         params.pop("target_class_idx", None)
         mlflow.log_params(params)
 
-        segmentation, method, replacement, predictor, explainer = _build_pipeline(cfg)
+        segmentation, method, replacement, predictor, explainer, preprocess_fn = (
+            _build_pipeline(cfg)
+        )
 
         batch_mode = cfg.data.get("batch_path") is not None
+
+        masks_path = cfg.data.get("masks_path")
+        mapping: ImageNetSMapping | None = (
+            build_imagenet_s_mapping() if masks_path else None
+        )
 
         for image_path in iter_image_paths(cfg):
             print(f"Starting explanation for: {image_path}")
@@ -238,13 +252,24 @@ def main(cfg: DictConfig) -> None:
                     segmentation=segmentation,
                     method=method,
                     replacement=replacement,
+                    preprocess_fn=preprocess_fn,
                 )
 
                 elapsed = time.perf_counter() - start_time
 
                 _log_explanation_results(run.info.run_id, results, elapsed)
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    seg_path = Path(tmpdir) / "segments.npy"
+                    np.save(seg_path, results.segments.cpu().numpy())
+                    mlflow.log_artifact(str(seg_path))
                 if cfg.logger.log_figures:
                     _log_figures(results)
+                if mapping is not None and masks_path is not None:
+                    mask_path = Path(masks_path) / (image_path.stem + ".png")
+                    if mask_path.exists():
+                        iou = compute_iou(results, load_mask(mask_path), mapping)
+                        if iou is not None:
+                            mlflow.log_metric("iou", iou)
                 _print_summary(image_path, results, elapsed)
 
 

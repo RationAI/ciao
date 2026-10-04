@@ -1,5 +1,5 @@
+from collections.abc import Callable
 from pathlib import Path
-from typing import cast
 
 import torch
 from PIL import Image
@@ -18,26 +18,38 @@ preprocess = transforms.Compose(
     ]
 )
 
+# PCam (resnet50.tiatoolbox-pcam) preprocessing — 96x96, no normalization
+preprocess_pcam = transforms.Compose(
+    [
+        transforms.Resize(96, interpolation=transforms.InterpolationMode.BICUBIC),
+        transforms.CenterCrop(96),
+        transforms.ToTensor(),
+    ]
+)
+
+
+def _load_and_preprocess(
+    image_path: str | Path,
+    transform: Callable[..., torch.Tensor],
+    device: torch.device | None = None,
+) -> torch.Tensor:
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    with Image.open(image_path) as img:
+        image = img.convert("RGB")
+        return transform(image).to(device)
+
 
 def load_and_preprocess_image(
     image_path: str | Path, device: torch.device | None = None
 ) -> torch.Tensor:
-    """Load and preprocess an image for the model.
+    """Load and preprocess an image with ImageNet normalization (224x224)."""
+    return _load_and_preprocess(image_path, preprocess, device)
 
-    Args:
-        image_path: Path to image file
-        device: Device to place tensor on (defaults to cuda if available, else cpu)
 
-    Returns:
-        Preprocessed image tensor [3, 224, 224] on specified device
-    """
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    # Use context manager to prevent file descriptor leaks
-    with Image.open(image_path) as img:
-        image = img.convert("RGB")
-        tensor = cast("torch.Tensor", preprocess(image))  # (3, 224, 224)
-        input_tensor = tensor.to(device)
-
-    return input_tensor
+def load_and_preprocess_image_pcam(
+    image_path: str | Path, device: torch.device | None = None
+) -> torch.Tensor:
+    """Load and preprocess an image for the PCam model (96x96, no normalization)."""
+    return _load_and_preprocess(image_path, preprocess_pcam, device)
